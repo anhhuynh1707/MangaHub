@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"mangahub/data"
 	"mangahub/internal/auth"
 	mangaPkg "mangahub/internal/manga"
+	"mangahub/internal/tcp"
 	userPkg "mangahub/internal/user"
 	"mangahub/pkg/database"
+	"mangahub/pkg/models"
 	"mangahub/pkg/utils"
 
 	"github.com/gin-gonic/gin"
@@ -79,6 +83,19 @@ func main() {
 	// --- MangaDex Client ---
 	mangaDexClient := mangaPkg.NewMangaDexClient()
 
+	// --- TCP Progress Sync Server (runs in goroutine) ---
+	tcpPort := os.Getenv("TCP_PORT")
+	if tcpPort == "" {
+		tcpPort = "9090"
+	}
+	tcpServer := tcp.NewProgressSyncServer(tcpPort)
+	tcpServer.Persister = userService // Save TCP progress updates to DB
+	go func() {
+		if err := tcpServer.Start(); err != nil {
+			log.Printf("TCP server error: %v", err)
+		}
+	}()
+
 	// --- Routes ---
 	r := server.Router
 
@@ -94,6 +111,15 @@ func main() {
 	// Auth routes (public)
 	r.POST("/auth/register", userHandler.Register)
 	r.POST("/auth/login", userHandler.Login)
+
+	// Auth routes (authenticated)
+	authRoutes := r.Group("/auth")
+	authRoutes.Use(auth.AuthMiddleware())
+	{
+		authRoutes.GET("/status", userHandler.AuthStatus)
+		authRoutes.POST("/logout", userHandler.Logout)
+		authRoutes.PUT("/change-password", userHandler.ChangePassword)
+	}
 
 	// Manga routes (public read)
 	r.GET("/manga", mangaHandler.Search)
@@ -116,7 +142,31 @@ func main() {
 		users.POST("/library", userHandler.AddToLibrary)
 		users.GET("/library", userHandler.GetLibrary)
 		users.DELETE("/library/:manga_id", userHandler.RemoveFromLibrary)
-		users.PUT("/progress", userHandler.UpdateProgress)
+		users.PUT("/progress", func(c *gin.Context) {
+			// Call the original handler
+			userHandler.UpdateProgress(c)
+
+			// If successful, broadcast to TCP clients
+			if c.Writer.Status() == 200 {
+				userID, _ := auth.GetUserIDFromContext(c)
+				var req models.UpdateProgressRequest
+				// Re-parse isn't needed; extract from the response context
+				mangaID := c.GetString("progress_manga_id")
+				chapter := c.GetInt("progress_chapter")
+				if mangaID == "" {
+					// Fallback: try to read from request body (already consumed)
+					_ = req
+				}
+				if mangaID != "" && chapter > 0 {
+					tcpServer.SendProgressUpdate(models.ProgressUpdate{
+						UserID:    userID,
+						MangaID:   mangaID,
+						Chapter:   chapter,
+						Timestamp: time.Now().Unix(),
+					})
+				}
+			}
+		})
 	}
 
 	// Data collection endpoints (authenticated)
@@ -149,6 +199,88 @@ func main() {
 				return
 			}
 			utils.SuccessResponse(c, "Manga exported as JSON", allManga)
+		})
+
+		// --- Web Scraping (Educational Practice) ---
+
+		// POST /data/scrape-quotes — Scrape quotes from quotes.toscrape.com
+		dataRoutes.POST("/scrape-quotes", func(c *gin.Context) {
+			pagesStr := c.DefaultQuery("pages", "3")
+			pages, _ := strconv.Atoi(pagesStr)
+
+			scraper := data.NewScraper()
+			quotes, err := scraper.ScrapeQuotes(pages)
+			if err != nil {
+				utils.InternalServerErrorResponse(c, "Scraping failed: "+err.Error())
+				return
+			}
+
+			// Save to JSON file
+			if err := data.ExportQuotesToJSON(quotes, "./data/scraped_quotes.json"); err != nil {
+				log.Printf("Warning: failed to save quotes to JSON: %v", err)
+			}
+
+			utils.SuccessResponse(c, fmt.Sprintf("Scraped %d quotes from %d pages", len(quotes), pages), gin.H{
+				"quotes": quotes,
+				"count":  len(quotes),
+				"pages":  pages,
+			})
+		})
+
+		// GET /data/scraped-quotes — View previously scraped quotes
+		dataRoutes.GET("/scraped-quotes", func(c *gin.Context) {
+			quotes, err := data.ImportQuotesFromJSON("./data/scraped_quotes.json")
+			if err != nil {
+				utils.NotFoundResponse(c, "No scraped quotes found. Run POST /data/scrape-quotes first.")
+				return
+			}
+			utils.SuccessResponse(c, fmt.Sprintf("Found %d scraped quotes", len(quotes)), quotes)
+		})
+
+		// POST /data/test-httpbin — Test HTTP methods against httpbin.org
+		dataRoutes.POST("/test-httpbin", func(c *gin.Context) {
+			scraper := data.NewScraper()
+			results, err := scraper.TestHTTPBin()
+			if err != nil {
+				utils.InternalServerErrorResponse(c, "HTTPBin test failed: "+err.Error())
+				return
+			}
+			utils.SuccessResponse(c, "HTTPBin tests completed", results)
+		})
+
+		// --- JSON File Storage ---
+
+		// POST /data/export-files — Export manga DB + user data to JSON files
+		dataRoutes.POST("/export-files", func(c *gin.Context) {
+			// Export all manga to JSON
+			allManga, err := mangaService.GetAll()
+			if err != nil {
+				utils.InternalServerErrorResponse(c, "Failed to get manga for export")
+				return
+			}
+			if err := data.ExportMangaToJSON(allManga, "./data/manga.json"); err != nil {
+				utils.InternalServerErrorResponse(c, "Failed to export manga JSON: "+err.Error())
+				return
+			}
+
+			utils.SuccessResponse(c, "Data exported to JSON files", gin.H{
+				"manga_file":  "./data/manga.json",
+				"manga_count": len(allManga),
+			})
+		})
+
+		// POST /data/import-json — Import manga from a JSON file
+		dataRoutes.POST("/import-json", func(c *gin.Context) {
+			mangaList, err := data.ImportMangaFromJSON("./data/manga.json")
+			if err != nil {
+				utils.NotFoundResponse(c, "No manga.json found. Run POST /data/export-files first.")
+				return
+			}
+			inserted, _ := mangaService.BulkCreate(mangaList)
+			utils.SuccessResponse(c, fmt.Sprintf("Imported %d manga from JSON", inserted), gin.H{
+				"imported": inserted,
+				"total":    len(mangaList),
+			})
 		})
 	}
 
@@ -230,4 +362,3 @@ func loadEnvFile(filename string) {
 
 	log.Println("Loaded configuration from .env file")
 }
-

@@ -185,9 +185,34 @@ func (s *Service) RemoveFromLibrary(userID, mangaID string) error {
 	return s.repo.RemoveFromLibrary(userID, mangaID)
 }
 
+// ChangePassword validates the old password and updates to a new one.
+func (s *Service) ChangePassword(userID string, req *models.ChangePasswordRequest) error {
+	user, err := s.repo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("user not found")
+	}
+
+	// Verify old password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
+		return errors.New("incorrect current password")
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("failed to hash new password")
+	}
+
+	return s.repo.UpdatePasswordHash(userID, string(hashedPassword))
+}
+
 // generateUserID creates a slug-style user ID from a username.
 func generateUserID(username string) string {
 	id := strings.ToLower(username)
 	id = strings.ReplaceAll(id, " ", "-")
 	return fmt.Sprintf("user-%s", id)
 }
+

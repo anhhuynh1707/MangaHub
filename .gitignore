@@ -1,1 +1,49 @@
+# ========================
+# MangaHub .gitignore
+# ========================
+
+# --- Environment & Secrets ---
 .env
+.env.local
+.env.*.local
+
+# --- Compiled Binaries ---
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# --- Database Files ---
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# --- Generated Data (re-creatable) ---
+data/*.json
+data/*_token.txt
+data/users/
+
+# --- IDE & Editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Go ---
+vendor/
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- CLI Config (local sessions) ---
+# These are stored in ~/.mangahub/ not in the project,
+# but just in case:
+profiles/
+config.json

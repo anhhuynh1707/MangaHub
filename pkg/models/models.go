@@ -88,6 +88,21 @@ type MangaSearchQuery struct {
 	Limit  int    `form:"limit,default=20"`
 }
 
+// ChangePasswordRequest is the payload for changing a user's password.
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=6,max=100"`
+}
+
+// ProgressUpdate represents a real-time progress update broadcast over TCP.
+// This is the spec-required struct for the TCP Progress Sync Server.
+type ProgressUpdate struct {
+	UserID    string `json:"user_id"`
+	MangaID   string `json:"manga_id"`
+	Chapter   int    `json:"chapter"`
+	Timestamp int64  `json:"timestamp"`
+}
+
 // ScrapedQuote represents a quote scraped from practice sites.
 type ScrapedQuote struct {
 	Text   string   `json:"text"`

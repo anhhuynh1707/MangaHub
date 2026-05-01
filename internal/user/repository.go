@@ -171,3 +171,20 @@ func (r *Repository) RemoveFromLibrary(userID, mangaID string) error {
 	}
 	return nil
 }
+
+// UpdatePasswordHash updates a user's password hash.
+func (r *Repository) UpdatePasswordHash(userID, newHash string) error {
+	result, err := r.db.Exec(
+		"UPDATE users SET password_hash = ? WHERE id = ?",
+		newHash, userID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+

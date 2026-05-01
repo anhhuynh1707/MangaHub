@@ -147,6 +147,10 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 		return
 	}
 
+	// Store in context for TCP broadcast integration
+	c.Set("progress_manga_id", req.MangaID)
+	c.Set("progress_chapter", req.CurrentChapter)
+
 	utils.SuccessResponse(c, "Progress updated", progress)
 }
 
@@ -172,3 +176,62 @@ func (h *Handler) RemoveFromLibrary(c *gin.Context) {
 
 	utils.SuccessResponse(c, "Manga removed from library", nil)
 }
+
+// ChangePassword handles password changes for authenticated users.
+// PUT /auth/change-password
+func (h *Handler) ChangePassword(c *gin.Context) {
+	userID, err := auth.GetUserIDFromContext(c)
+	if err != nil {
+		utils.UnauthorizedResponse(c, "Unable to identify user")
+		return
+	}
+
+	var req models.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.service.ChangePassword(userID, &req); err != nil {
+		if err.Error() == "incorrect current password" {
+			utils.UnauthorizedResponse(c, err.Error())
+			return
+		}
+		utils.InternalServerErrorResponse(c, "Failed to change password")
+		return
+	}
+
+	utils.SuccessResponse(c, "Password changed successfully", nil)
+}
+
+// AuthStatus returns the current authentication status.
+// GET /auth/status
+func (h *Handler) AuthStatus(c *gin.Context) {
+	userID, err := auth.GetUserIDFromContext(c)
+	if err != nil {
+		utils.UnauthorizedResponse(c, "Not authenticated")
+		return
+	}
+
+	username, _ := c.Get("username")
+
+	user, err := h.service.GetProfile(userID)
+	if err != nil {
+		utils.UnauthorizedResponse(c, "User not found")
+		return
+	}
+
+	utils.SuccessResponse(c, "Authenticated", gin.H{
+		"user_id":    userID,
+		"username":   username,
+		"created_at": user.CreatedAt,
+	})
+}
+
+// Logout is a no-op for stateless JWT auth.
+// The client should discard the token.
+// POST /auth/logout
+func (h *Handler) Logout(c *gin.Context) {
+	utils.SuccessResponse(c, "Logged out successfully. Discard your token.", nil)
+}
+
