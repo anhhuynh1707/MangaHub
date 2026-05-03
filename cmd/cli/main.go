@@ -24,6 +24,8 @@ func main() {
 		handleProgress(os.Args[2:])
 	case "sync":
 		handleSync(os.Args[2:])
+	case "notify":
+		handleNotify(os.Args[2:])
 	case "server":
 		handleServer(os.Args[2:])
 	case "help", "--help", "-h":
@@ -53,6 +55,7 @@ func printUsage() {
    library     Library management (add, list, remove, update)
    progress    Reading progress (update, history)
    sync        TCP progress sync (connect, disconnect, status, monitor)
+   notify      UDP notifications (subscribe, unsubscribe, test, send)
    server      Server management (status, start)
 
  EXAMPLES:
@@ -64,6 +67,8 @@ func printUsage() {
    mangahub library list
    mangahub progress update --manga-id one-piece --chapter 1095
    mangahub sync connect
+   mangahub notify subscribe
+   mangahub notify test
 
  Use 'mangahub <command> --help' for more information about a command.`)
 }

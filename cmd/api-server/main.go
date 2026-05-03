@@ -14,6 +14,7 @@ import (
 	"mangahub/internal/auth"
 	mangaPkg "mangahub/internal/manga"
 	"mangahub/internal/tcp"
+	"mangahub/internal/udp"
 	userPkg "mangahub/internal/user"
 	"mangahub/pkg/database"
 	"mangahub/pkg/models"
@@ -93,6 +94,18 @@ func main() {
 	go func() {
 		if err := tcpServer.Start(); err != nil {
 			log.Printf("TCP server error: %v", err)
+		}
+	}()
+
+	// --- UDP Notification Server (runs in goroutine) ---
+	udpPort := os.Getenv("UDP_PORT")
+	if udpPort == "" {
+		udpPort = "9091"
+	}
+	udpServer := udp.NewNotificationServer(udpPort)
+	go func() {
+		if err := udpServer.Start(); err != nil {
+			log.Printf("UDP server error: %v", err)
 		}
 	}()
 
@@ -184,6 +197,43 @@ func main() {
 				"connected_count": len(connectedUsers),
 				"connected_users": connectedUsers,
 				"your_user_id":    userID,
+			})
+		})
+	}
+
+	// Notification endpoints (authenticated) — used by CLI `mangahub notify send`
+	notifyRoutes := r.Group("/notify")
+	notifyRoutes.Use(auth.AuthMiddleware())
+	{
+		notifyRoutes.POST("/broadcast", func(c *gin.Context) {
+			var req struct {
+				Type    string `json:"type"`
+				MangaID string `json:"manga_id"`
+				Message string `json:"message"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				utils.BadRequestResponse(c, "Invalid request body")
+				return
+			}
+
+			notif := udp.Notification{
+				Type:    req.Type,
+				MangaID: req.MangaID,
+				Message: req.Message,
+			}
+			sent := udpServer.BroadcastNotification(notif)
+			utils.SuccessResponse(c, fmt.Sprintf("Notification sent to %d clients", sent), gin.H{
+				"type":       req.Type,
+				"sent_count": sent,
+				"message":    req.Message,
+			})
+		})
+
+		notifyRoutes.GET("/status", func(c *gin.Context) {
+			utils.SuccessResponse(c, "UDP notification server status", gin.H{
+				"server":       fmt.Sprintf("localhost:%s", udpPort),
+				"client_count": udpServer.GetClientCount(),
+				"clients":      udpServer.GetClients(),
 			})
 		})
 	}
@@ -308,6 +358,7 @@ func main() {
 	log.Printf("📖 Health check: http://localhost:%s/health", port)
 	log.Printf("📚 Endpoints: POST /auth/register, POST /auth/login, GET /manga, GET /manga/:id")
 	log.Printf("📚 Endpoints: POST /users/library, GET /users/library, PUT /users/progress")
+	log.Printf("📢 Endpoints: POST /notify/broadcast, GET /notify/status")
 
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
