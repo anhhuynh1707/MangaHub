@@ -169,6 +169,25 @@ func main() {
 		})
 	}
 
+	// Sync status endpoint (authenticated) — used by CLI `mangahub sync status`
+	syncRoutes := r.Group("/sync")
+	syncRoutes.Use(auth.AuthMiddleware())
+	{
+		syncRoutes.GET("/status", func(c *gin.Context) {
+			userID, _ := auth.GetUserIDFromContext(c)
+			connectedUsers := tcpServer.GetConnectedUsers()
+			uptime := tcpServer.GetUptime()
+
+			utils.SuccessResponse(c, "TCP sync server status", gin.H{
+				"server":          fmt.Sprintf("localhost:%s", tcpPort),
+				"uptime":          uptime.String(),
+				"connected_count": len(connectedUsers),
+				"connected_users": connectedUsers,
+				"your_user_id":    userID,
+			})
+		})
+	}
+
 	// Data collection endpoints (authenticated)
 	dataRoutes := r.Group("/data")
 	dataRoutes.Use(auth.AuthMiddleware())

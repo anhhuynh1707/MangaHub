@@ -47,3 +47,6 @@ docker-compose.override.yml
 # but just in case:
 profiles/
 config.json
+
+# --- Documentation ---
+*.md
