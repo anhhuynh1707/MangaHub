@@ -26,6 +26,8 @@ func main() {
 		handleSync(os.Args[2:])
 	case "notify":
 		handleNotify(os.Args[2:])
+	case "chat":
+		handleChat(os.Args[2:])
 	case "server":
 		handleServer(os.Args[2:])
 	case "help", "--help", "-h":
@@ -56,6 +58,7 @@ func printUsage() {
    progress    Reading progress (update, history)
    sync        TCP progress sync (connect, disconnect, status, monitor)
    notify      UDP notifications (subscribe, unsubscribe, test, send)
+   chat        WebSocket chat (join, send, history)
    server      Server management (status, start)
 
  EXAMPLES:
@@ -69,6 +72,8 @@ func printUsage() {
    mangahub sync connect
    mangahub notify subscribe
    mangahub notify test
+   mangahub chat join
+   mangahub chat send "Hello everyone!"
 
  Use 'mangahub <command> --help' for more information about a command.`)
 }

@@ -15,6 +15,7 @@ import (
 	mangaPkg "mangahub/internal/manga"
 	"mangahub/internal/tcp"
 	"mangahub/internal/udp"
+	wsPkg "mangahub/internal/websocket"
 	userPkg "mangahub/internal/user"
 	"mangahub/pkg/database"
 	"mangahub/pkg/models"
@@ -108,6 +109,10 @@ func main() {
 			log.Printf("UDP server error: %v", err)
 		}
 	}()
+
+	// --- WebSocket Chat Hub (runs in goroutine) ---
+	chatHub := wsPkg.NewChatHub()
+	go chatHub.Run()
 
 	// --- Routes ---
 	r := server.Router
@@ -238,6 +243,20 @@ func main() {
 		})
 	}
 
+	// WebSocket chat endpoint (auth via query param)
+	r.GET("/ws/chat", func(c *gin.Context) {
+		wsPkg.HandleWebSocket(chatHub, c.Writer, c.Request)
+	})
+
+	// Chat history endpoint (authenticated)
+	r.GET("/chat/history", auth.AuthMiddleware(), func(c *gin.Context) {
+		limitStr := c.DefaultQuery("limit", "20")
+		limit, _ := strconv.Atoi(limitStr)
+		room := c.DefaultQuery("room", "general")
+		history := chatHub.GetHistory(room, limit)
+		utils.SuccessResponse(c, fmt.Sprintf("%d messages", len(history)), history)
+	})
+
 	// Data collection endpoints (authenticated)
 	dataRoutes := r.Group("/data")
 	dataRoutes.Use(auth.AuthMiddleware())
@@ -359,6 +378,7 @@ func main() {
 	log.Printf("📚 Endpoints: POST /auth/register, POST /auth/login, GET /manga, GET /manga/:id")
 	log.Printf("📚 Endpoints: POST /users/library, GET /users/library, PUT /users/progress")
 	log.Printf("📢 Endpoints: POST /notify/broadcast, GET /notify/status")
+	log.Printf("💬 Endpoints: GET /ws/chat (WebSocket), GET /chat/history")
 
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
