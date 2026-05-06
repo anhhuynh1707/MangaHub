@@ -75,15 +75,15 @@ func main() {
 	userService := userPkg.NewService(userRepo)
 	mangaService := mangaPkg.NewService(mangaRepo)
 
+	// --- MangaDex Client ---
+	mangaDexClient := mangaPkg.NewMangaDexClient()
+
 	// --- Seed data on first run ---
-	seedDatabase(mangaService)
+	seedDatabase(mangaService, mangaDexClient)
 
 	// --- Handlers ---
 	userHandler := userPkg.NewHandler(userService)
 	mangaHandler := mangaPkg.NewHandler(mangaService)
-
-	// --- MangaDex Client ---
-	mangaDexClient := mangaPkg.NewMangaDexClient()
 
 	// --- TCP Progress Sync Server (runs in goroutine) ---
 	tcpPort := os.Getenv("TCP_PORT")
@@ -386,25 +386,39 @@ func main() {
 }
 
 // seedDatabase seeds the database with initial manga data if empty.
-func seedDatabase(mangaService *mangaPkg.Service) {
+func seedDatabase(mangaService *mangaPkg.Service, mangaDexClient *mangaPkg.MangaDexClient) {
 	count, err := mangaService.GetCount()
 	if err != nil {
 		log.Printf("Warning: could not check manga count: %v", err)
 		return
 	}
-	if count > 0 {
+	if count >= 200 {
 		log.Printf("Database already has %d manga, skipping seed", count)
 		return
 	}
 
-	log.Println("Seeding database with initial manga data...")
-	seedManga := data.GetSeedManga()
-	inserted, err := mangaService.BulkCreate(seedManga)
-	if err != nil {
-		log.Printf("Warning: failed to seed database: %v", err)
-		return
+	if count < 100 {
+		log.Println("Seeding database with initial manga data...")
+		seedManga := data.GetSeedManga()
+		inserted, err := mangaService.BulkCreate(seedManga)
+		if err != nil {
+			log.Printf("Warning: failed to seed database: %v", err)
+		} else {
+			log.Printf("✅ Successfully seeded %d manga series from static data", inserted)
+		}
 	}
-	log.Printf("✅ Successfully seeded %d manga series", inserted)
+
+	// Fetch from MangaDex if we still have < 200
+	count, _ = mangaService.GetCount()
+	if count < 200 {
+		log.Println("Fetching additional manga from MangaDex API...")
+		imported, err := mangaPkg.ImportFromMangaDex(mangaService, mangaDexClient, 100)
+		if err != nil {
+			log.Printf("Warning: failed to import from MangaDex: %v", err)
+		} else {
+			log.Printf("✅ Successfully imported %d manga from MangaDex API", imported)
+		}
+	}
 }
 
 // loadEnvFile reads a .env file and sets environment variables.

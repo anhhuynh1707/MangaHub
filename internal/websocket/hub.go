@@ -2,7 +2,6 @@ package websocket
 
 import (
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -78,7 +77,7 @@ func (h *ChatHub) Run() {
 			h.Clients[client] = true
 			h.mu.Unlock()
 
-			log.Printf("WS: %s joined room %s (total: %d)", client.Username, client.Room, h.GetClientCount())
+			log.Printf("WS: %s joined room %s (total in room: %d)", client.Username, client.Room, h.GetClientCount(client.Room))
 
 			// Send join notification to all OTHER clients in the SAME room
 			joinMsg := ChatMessage{
@@ -128,7 +127,7 @@ func (h *ChatHub) Run() {
 			}
 			h.mu.Unlock()
 
-			log.Printf("WS: %s left room %s (total: %d)", client.Username, client.Room, h.GetClientCount())
+			log.Printf("WS: %s left room %s (total in room: %d)", client.Username, client.Room, h.GetClientCount(client.Room))
 
 			// Notify remaining clients in the SAME room
 			leaveMsg := ChatMessage{
@@ -179,27 +178,29 @@ func (h *ChatHub) Run() {
 	}
 }
 
-// GetClientCount returns the number of connected clients.
-func (h *ChatHub) GetClientCount() int {
+// GetClientCount returns the number of connected clients in a specific room.
+func (h *ChatHub) GetClientCount(room string) int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return len(h.Clients)
+	count := 0
+	for c := range h.Clients {
+		if c.Room == room {
+			count++
+		}
+	}
+	return count
 }
 
-// GetOnlineUsers returns a list of all connected usernames with their rooms.
-func (h *ChatHub) GetOnlineUsers() []string {
+// GetOnlineUsers returns a list of all connected usernames in a specific room.
+func (h *ChatHub) GetOnlineUsers(room string) []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	users := make([]string, 0, len(h.Clients))
+	users := make([]string, 0)
 	for c := range h.Clients {
-		roomDisplay := c.Room
-		if roomDisplay == "general" {
-			roomDisplay = "General Chat"
-		} else {
-			roomDisplay = strings.Title(strings.ReplaceAll(roomDisplay, "-", " ")) + " Discussion"
+		if c.Room == room {
+			users = append(users, c.Username)
 		}
-		users = append(users, c.Username+" ("+roomDisplay+")")
 	}
 	return users
 }

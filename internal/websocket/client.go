@@ -46,7 +46,8 @@ func HandleWebSocket(hub *ChatHub, w http.ResponseWriter, r *http.Request) {
 
 	room := r.URL.Query().Get("room")
 	if room == "" {
-		room = "general"
+		http.Error(w, "Missing room query parameter", http.StatusBadRequest)
+		return
 	}
 
 	// Create client with buffered send channel
@@ -66,7 +67,7 @@ func HandleWebSocket(hub *ChatHub, w http.ResponseWriter, r *http.Request) {
 		Type:      "system",
 		Message:   fmt.Sprintf("Welcome to MangaHub Chat, %s! Type /help for commands.", claims.Username),
 		Room:      room,
-		Users:     hub.GetOnlineUsers(),
+		Users:     hub.GetOnlineUsers(room),
 		Timestamp: time.Now().Unix(),
 	}
 
@@ -174,10 +175,10 @@ func handleClientMessage(hub *ChatHub, client *ChatClient, msg *ChatMessage) {
 			})
 
 		case "/users":
-			users := hub.GetOnlineUsers()
+			users := hub.GetOnlineUsers(client.Room)
 			hub.SendToClient(client, ChatMessage{
 				Type:      "users",
-				Message:   fmt.Sprintf("Online Users (%d):", len(users)),
+				Message:   fmt.Sprintf("Online Users in #%s (%d):", client.Room, len(users)),
 				Users:     users,
 				Timestamp: time.Now().Unix(),
 			})
@@ -246,7 +247,7 @@ func handleClientMessage(hub *ChatHub, client *ChatClient, msg *ChatMessage) {
 		case "/status":
 			hub.SendToClient(client, ChatMessage{
 				Type:      "system",
-				Message:   fmt.Sprintf("Connected as: %s (%s)\nRoom: #%s\nOnline users: %d", client.Username, client.UserID, client.Room, hub.GetClientCount()),
+				Message:   fmt.Sprintf("Connected as: %s (%s)\nRoom: #%s\nUsers in room: %d", client.Username, client.UserID, client.Room, hub.GetClientCount(client.Room)),
 				Timestamp: time.Now().Unix(),
 			})
 

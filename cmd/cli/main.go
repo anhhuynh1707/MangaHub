@@ -72,8 +72,9 @@ func printUsage() {
    mangahub sync connect
    mangahub notify subscribe
    mangahub notify test
-   mangahub chat join
-   mangahub chat send "Hello everyone!"
+   mangahub chat join general
+   mangahub chat join one-piece
+   mangahub chat send one-piece "Hello One Piece fans!"
 
  Use 'mangahub <command> --help' for more information about a command.`)
 }
