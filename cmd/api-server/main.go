@@ -15,8 +15,9 @@ import (
 	mangaPkg "mangahub/internal/manga"
 	"mangahub/internal/tcp"
 	"mangahub/internal/udp"
-	wsPkg "mangahub/internal/websocket"
 	userPkg "mangahub/internal/user"
+	wsPkg "mangahub/internal/websocket"
+	grpcServer "mangahub/internal/grpc"
 	"mangahub/pkg/database"
 	"mangahub/pkg/models"
 	"mangahub/pkg/utils"
@@ -113,6 +114,17 @@ func main() {
 	// --- WebSocket Chat Hub (runs in goroutine) ---
 	chatHub := wsPkg.NewChatHub()
 	go chatHub.Run()
+
+	// --- gRPC Internal Service (runs in goroutine) ---
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "9092"
+	}
+	go func() {
+		if err := grpcServer.StartGRPCServer(grpcPort, mangaService, userService); err != nil {
+			log.Printf("gRPC server error: %v", err)
+		}
+	}()
 
 	// --- Routes ---
 	r := server.Router

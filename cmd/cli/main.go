@@ -28,6 +28,8 @@ func main() {
 		handleNotify(os.Args[2:])
 	case "chat":
 		handleChat(os.Args[2:])
+	case "grpc":
+		handleGRPC(os.Args[2:])
 	case "server":
 		handleServer(os.Args[2:])
 	case "help", "--help", "-h":
@@ -59,6 +61,7 @@ func printUsage() {
    sync        TCP progress sync (connect, disconnect, status, monitor)
    notify      UDP notifications (subscribe, unsubscribe, test, send)
    chat        WebSocket chat (join, send, history)
+   grpc        gRPC internal service (manga get/search, progress update)
    server      Server management (status, start)
 
  EXAMPLES:
@@ -75,6 +78,8 @@ func printUsage() {
    mangahub chat join general
    mangahub chat join one-piece
    mangahub chat send one-piece "Hello One Piece fans!"
+   mangahub grpc manga get --id one-piece
+   mangahub grpc manga search --query "naruto"
 
  Use 'mangahub <command> --help' for more information about a command.`)
 }
