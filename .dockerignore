@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+*.exe
+*.db
+**/*.db
+data/*.db
+*.log
+.gemini/
+tmp/
+mangahub
+api-server
+tcp-server
+udp-server
+grpc-server

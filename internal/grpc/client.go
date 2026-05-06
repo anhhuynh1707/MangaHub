@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	pb "mangahub/internal/grpc/pb"
@@ -24,12 +23,9 @@ func NewMangaClient(addr, token string) (*MangaClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
+	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
-		return nil, fmt.Errorf("gRPC: failed to connect to %s: %w", addr, err)
+		return nil, err
 	}
 
 	return &MangaClient{
@@ -54,7 +50,7 @@ func (c *MangaClient) Close() error {
 	return nil
 }
 
-// GetManga retrieves a single manga by its slug ID.
+// GetManga fetches a single manga by ID via gRPC.
 func (c *MangaClient) GetManga(mangaID string) (*pb.MangaResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -65,7 +61,7 @@ func (c *MangaClient) GetManga(mangaID string) (*pb.MangaResponse, error) {
 	})
 }
 
-// SearchManga queries the manga database by title and/or genre.
+// SearchManga searches manga by title and/or genre via gRPC.
 func (c *MangaClient) SearchManga(query, genre string, limit int32) (*pb.SearchResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -78,7 +74,7 @@ func (c *MangaClient) SearchManga(query, genre string, limit int32) (*pb.SearchR
 	})
 }
 
-// UpdateProgress updates a user's reading progress for a manga.
+// UpdateProgress updates reading progress via gRPC.
 func (c *MangaClient) UpdateProgress(userID, mangaID string, chapter int32) (*pb.ProgressResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

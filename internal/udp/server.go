@@ -20,7 +20,7 @@ type NotificationServer struct {
 
 // Notification represents a UDP notification message.
 type Notification struct {
-	Type      string `json:"type"`                // "new_chapter", "system", "manga_update", "register", "unregister", "register_ack", "test"
+	Type      string `json:"type"` // "new_chapter", "system", "manga_update", "register", "unregister", "register_ack", "test"
 	MangaID   string `json:"manga_id,omitempty"`
 	Title     string `json:"title,omitempty"`
 	Message   string `json:"message"`

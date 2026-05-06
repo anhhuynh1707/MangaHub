@@ -137,10 +137,10 @@ func (s *ProgressSyncServer) handleAuth(conn net.Conn, msg *TCPMessage, remoteAd
 	log.Printf("TCP: User %s (%s) authenticated from %s", claims.Username, claims.UserID, remoteAddr)
 
 	s.sendMessage(conn, TCPMessage{
-		Type:     "auth",
-		UserID:   claims.UserID,
-		Username: claims.Username,
-		Message:  fmt.Sprintf("Authenticated as %s. You will receive progress broadcasts.", claims.Username),
+		Type:      "auth",
+		UserID:    claims.UserID,
+		Username:  claims.Username,
+		Message:   fmt.Sprintf("Authenticated as %s. You will receive progress broadcasts.", claims.Username),
 		Timestamp: time.Now().Unix(),
 	})
 
