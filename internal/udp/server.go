@@ -71,8 +71,44 @@ func (s *NotificationServer) Stop() {
 	log.Println("UDP notification server stopped")
 }
 
-// handleMessage processes an incoming UDP message from a client.
+// handleMessage processes an incoming UDP message from a client or API.
 func (s *NotificationServer) handleMessage(data []byte, clientAddr *net.UDPAddr) {
+	// First, try to unmarshal as a broadcast message from the API
+	var broadcastMsg map[string]interface{}
+	if err := json.Unmarshal(data, &broadcastMsg); err != nil {
+		log.Printf("UDP: Invalid JSON from %s: %v", clientAddr, err)
+		s.sendTo(clientAddr, Notification{
+			Type:      "error",
+			Message:   "Invalid JSON message",
+			Timestamp: time.Now().Unix(),
+		})
+		return
+	}
+
+	// Check if this is an API broadcast message
+	if msgType, ok := broadcastMsg["type"].(string); ok && msgType == "api_broadcast" {
+		// Handle broadcast from API
+		if notifData, ok := broadcastMsg["notification"]; ok {
+			// Re-marshal and unmarshal the notification
+			notifJSON, err := json.Marshal(notifData)
+			if err != nil {
+				log.Printf("UDP: Failed to extract notification: %v", err)
+				return
+			}
+
+			var notif Notification
+			if err := json.Unmarshal(notifJSON, &notif); err != nil {
+				log.Printf("UDP: Failed to unmarshal notification: %v", err)
+				return
+			}
+
+			log.Printf("UDP: Received broadcast from API: type=%s, manga_id=%s", notif.Type, notif.MangaID)
+			s.BroadcastNotification(notif)
+		}
+		return
+	}
+
+	// Otherwise, handle as a regular client message
 	var msg Notification
 	if err := json.Unmarshal(data, &msg); err != nil {
 		log.Printf("UDP: Invalid message from %s: %v", clientAddr, err)
@@ -116,7 +152,7 @@ func (s *NotificationServer) handleMessage(data []byte, clientAddr *net.UDPAddr)
 		log.Printf("UDP: Unknown message type '%s' from %s", msg.Type, clientAddr)
 		s.sendTo(clientAddr, Notification{
 			Type:      "error",
-			Message:   fmt.Sprintf("Unknown type: %s. Valid: register, unregister, test", msg.Type),
+			Message:   fmt.Sprintf("Unknown type: %s. Valid: register, unregister, test, api_broadcast", msg.Type),
 			Timestamp: time.Now().Unix(),
 		})
 	}

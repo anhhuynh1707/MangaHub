@@ -27,9 +27,14 @@ import (
 
 // APIServer is the core server structure per spec requirements.
 type APIServer struct {
-	Router    *gin.Engine
-	Database  *sql.DB
-	JWTSecret string
+	Router     *gin.Engine
+	Database   *sql.DB
+	JWTSecret  string
+	TCPServer  *tcp.ProgressSyncServer
+	TCPClient  *tcp.ProgressSyncClient
+	UDPServer  *udp.NotificationServer
+	UDPClient  *udp.NotificationClient
+	UseClients bool // true if using remote services
 }
 
 func main() {
@@ -61,13 +66,6 @@ func main() {
 	}
 	defer db.Close()
 
-	// --- Build APIServer ---
-	server := &APIServer{
-		Router:    gin.Default(),
-		Database:  db,
-		JWTSecret: string(auth.JWTSecret),
-	}
-
 	// --- Repositories ---
 	userRepo := userPkg.NewRepository(db)
 	mangaRepo := mangaPkg.NewRepository(db)
@@ -86,6 +84,28 @@ func main() {
 	userHandler := userPkg.NewHandler(userService)
 	mangaHandler := mangaPkg.NewHandler(mangaService)
 
+	// --- Service Configuration ---
+	enableTCPServer := os.Getenv("ENABLE_TCP_SERVER")
+	if enableTCPServer == "" {
+		enableTCPServer = "true"
+	}
+	enableUDPServer := os.Getenv("ENABLE_UDP_SERVER")
+	if enableUDPServer == "" {
+		enableUDPServer = "true"
+	}
+	enableGRPCServer := os.Getenv("ENABLE_GRPC_SERVER")
+	if enableGRPCServer == "" {
+		enableGRPCServer = "true"
+	}
+
+	// --- Build APIServer (after config flags are set) ---
+	server := &APIServer{
+		Router:     gin.Default(),
+		Database:   db,
+		JWTSecret:  string(auth.JWTSecret),
+		UseClients: enableUDPServer == "false" || enableTCPServer == "false",
+	}
+
 	// --- TCP Progress Sync Server (runs in goroutine) ---
 	tcpPort := os.Getenv("TCP_PORT")
 	if tcpPort == "" {
@@ -93,11 +113,24 @@ func main() {
 	}
 	tcpServer := tcp.NewProgressSyncServer(tcpPort)
 	tcpServer.Persister = userService // Save TCP progress updates to DB
-	go func() {
-		if err := tcpServer.Start(); err != nil {
-			log.Printf("TCP server error: %v", err)
+	server.TCPServer = tcpServer
+
+	if enableTCPServer == "true" {
+		log.Println("Starting internal TCP server...")
+		go func() {
+			if err := tcpServer.Start(); err != nil {
+				log.Printf("TCP server error: %v", err)
+			}
+		}()
+	} else {
+		log.Printf("TCP server disabled - using remote service at %s", tcpPort)
+		tcpClient, err := tcp.NewProgressSyncClient(tcpPort)
+		if err != nil {
+			log.Printf("Warning: Failed to connect to remote TCP server: %v", err)
+		} else {
+			server.TCPClient = tcpClient
 		}
-	}()
+	}
 
 	// --- UDP Notification Server (runs in goroutine) ---
 	udpPort := os.Getenv("UDP_PORT")
@@ -105,11 +138,24 @@ func main() {
 		udpPort = "9091"
 	}
 	udpServer := udp.NewNotificationServer(udpPort)
-	go func() {
-		if err := udpServer.Start(); err != nil {
-			log.Printf("UDP server error: %v", err)
+	server.UDPServer = udpServer
+
+	if enableUDPServer == "true" {
+		log.Println("Starting internal UDP server...")
+		go func() {
+			if err := udpServer.Start(); err != nil {
+				log.Printf("UDP server error: %v", err)
+			}
+		}()
+	} else {
+		log.Printf("UDP server disabled - using remote service at %s", udpPort)
+		udpClient, err := udp.NewNotificationClient(udpPort)
+		if err != nil {
+			log.Printf("Warning: Failed to connect to remote UDP server: %v", err)
+		} else {
+			server.UDPClient = udpClient
 		}
-	}()
+	}
 
 	// --- WebSocket Chat Hub (runs in goroutine) ---
 	chatHub := wsPkg.NewChatHub()
@@ -120,11 +166,17 @@ func main() {
 	if grpcPort == "" {
 		grpcPort = "9092"
 	}
-	go func() {
-		if err := grpcServer.StartGRPCServer(grpcPort, mangaService, userService); err != nil {
-			log.Printf("gRPC server error: %v", err)
-		}
-	}()
+
+	if enableGRPCServer == "true" {
+		log.Println("Starting internal gRPC server...")
+		go func() {
+			if err := grpcServer.StartGRPCServer(grpcPort, mangaService, userService); err != nil {
+				log.Printf("gRPC server error: %v", err)
+			}
+		}()
+	} else {
+		log.Println("gRPC server disabled (using external service)")
+	}
 
 	// --- Routes ---
 	r := server.Router
@@ -188,12 +240,21 @@ func main() {
 					_ = req
 				}
 				if mangaID != "" && chapter > 0 {
-					tcpServer.SendProgressUpdate(models.ProgressUpdate{
+					update := models.ProgressUpdate{
 						UserID:    userID,
 						MangaID:   mangaID,
 						Chapter:   chapter,
 						Timestamp: time.Now().Unix(),
-					})
+					}
+
+					// Use client if remote, otherwise use local server
+					if server.TCPClient != nil {
+						if err := server.TCPClient.SendProgressUpdate(update); err != nil {
+							log.Printf("TCP client error: %v", err)
+						}
+					} else if server.TCPServer != nil {
+						server.TCPServer.SendProgressUpdate(update)
+					}
 				}
 			}
 		})
@@ -205,8 +266,16 @@ func main() {
 	{
 		syncRoutes.GET("/status", func(c *gin.Context) {
 			userID, _ := auth.GetUserIDFromContext(c)
-			connectedUsers := tcpServer.GetConnectedUsers()
-			uptime := tcpServer.GetUptime()
+			var connectedUsers []string
+			var uptime time.Duration
+
+			if server.TCPServer != nil {
+				connectedUsers = server.TCPServer.GetConnectedUsers()
+				uptime = server.TCPServer.GetUptime()
+			} else {
+				connectedUsers = []string{}
+				uptime = 0
+			}
 
 			utils.SuccessResponse(c, "TCP sync server status", gin.H{
 				"server":          fmt.Sprintf("localhost:%s", tcpPort),
@@ -234,11 +303,26 @@ func main() {
 			}
 
 			notif := udp.Notification{
-				Type:    req.Type,
-				MangaID: req.MangaID,
-				Message: req.Message,
+				Type:      req.Type,
+				MangaID:   req.MangaID,
+				Message:   req.Message,
+				Timestamp: time.Now().Unix(),
 			}
-			sent := udpServer.BroadcastNotification(notif)
+
+			var sent int
+			if server.UDPClient != nil {
+				// Remote mode: send to remote server
+				if err := server.UDPClient.SendNotification(notif); err != nil {
+					log.Printf("UDP client error: %v", err)
+					utils.InternalServerErrorResponse(c, "Failed to send notification")
+					return
+				}
+				sent = 1 // We can't know actual count in client mode
+			} else if server.UDPServer != nil {
+				// Local mode: broadcast locally
+				sent = server.UDPServer.BroadcastNotification(notif)
+			}
+
 			utils.SuccessResponse(c, fmt.Sprintf("Notification sent to %d clients", sent), gin.H{
 				"type":       req.Type,
 				"sent_count": sent,
@@ -247,10 +331,21 @@ func main() {
 		})
 
 		notifyRoutes.GET("/status", func(c *gin.Context) {
+			var clientCount int
+			var clients []string
+
+			if server.UDPServer != nil {
+				clientCount = server.UDPServer.GetClientCount()
+				clients = server.UDPServer.GetClients()
+			} else {
+				clientCount = 0
+				clients = []string{}
+			}
+
 			utils.SuccessResponse(c, "UDP notification server status", gin.H{
 				"server":       fmt.Sprintf("localhost:%s", udpPort),
-				"client_count": udpServer.GetClientCount(),
-				"clients":      udpServer.GetClients(),
+				"client_count": clientCount,
+				"clients":      clients,
 			})
 		})
 	}

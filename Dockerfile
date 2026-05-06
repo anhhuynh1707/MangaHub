@@ -15,7 +15,7 @@ RUN go mod download
 
 # Copy source code
 COPY . .
-# Build all binaries
+# Build all binaries (with CGO for SQLite support)
 RUN go build -o /app/bin/api-server ./cmd/api-server
 RUN go build -o /app/bin/udp-server ./cmd/udp-server
 RUN go build -o /app/bin/tcp-server ./cmd/tcp-server
@@ -23,7 +23,7 @@ RUN go build -o /app/bin/grpc-server ./cmd/grpc-server
 RUN go build -o /app/bin/mangahub ./cmd/cli
 
 # Final stage
-FROM debian:stable-slim
+FROM debian:12-slim
 
 WORKDIR /app
 

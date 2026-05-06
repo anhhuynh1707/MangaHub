@@ -1,21 +1,61 @@
 services:
-  mangahub:
+  mangahub-api:
     build: .
     command: api-server
     ports:
-      - "8080:8080"      # HTTP API & WebSocket
-      - "9090:9090"      # TCP Progress Sync
-      - "9091:9091/udp"  # UDP Notifications
-      - "9092:9092"      # gRPC Internal Service
+      - "8080:8080" # HTTP API & WebSocket
     volumes:
       - mangahub-data:/app/data
     environment:
       - PORT=8080
-      - TCP_PORT=9090
-      - UDP_PORT=9091
-      - GRPC_PORT=9092
+      - TCP_PORT=mangahub-tcp:9090
+      - UDP_PORT=mangahub-udp:9091
+      - GRPC_PORT=mangahub-grpc:9092
       - DB_PATH=/app/data/mangahub.db
       - GIN_MODE=release
+      - ENABLE_TCP_SERVER=false
+      - ENABLE_UDP_SERVER=false
+      - ENABLE_GRPC_SERVER=false
+    restart: unless-stopped
+    depends_on:
+      - mangahub-tcp
+      - mangahub-udp
+      - mangahub-grpc
+
+  mangahub-tcp:
+    build: .
+    command: tcp-server
+    ports:
+      - "9090:9090"
+    volumes:
+      - mangahub-data:/app/data
+    environment:
+      - TCP_PORT=9090
+      - DB_PATH=/app/data/mangahub.db
+    restart: unless-stopped
+
+  mangahub-udp:
+    build: .
+    command: udp-server
+    ports:
+      - "9091:9091/udp"
+    volumes:
+      - mangahub-data:/app/data
+    environment:
+      - UDP_PORT=9091
+      - DB_PATH=/app/data/mangahub.db
+    restart: unless-stopped
+
+  mangahub-grpc:
+    build: .
+    command: grpc-server
+    ports:
+      - "9092:9092"
+    volumes:
+      - mangahub-data:/app/data
+    environment:
+      - GRPC_PORT=9092
+      - DB_PATH=/app/data/mangahub.db
     restart: unless-stopped
 
 volumes:
