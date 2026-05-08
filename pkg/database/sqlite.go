@@ -75,9 +75,66 @@ func createSchema(db *sql.DB) error {
 		FOREIGN KEY (manga_id) REFERENCES manga(id)
 	);
 
+	CREATE TABLE IF NOT EXISTS reviews (
+		id         TEXT PRIMARY KEY,
+		user_id    TEXT NOT NULL,
+		manga_id   TEXT NOT NULL,
+		rating     INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 10),
+		text       TEXT,
+		helpful    INTEGER DEFAULT 0,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id),
+		FOREIGN KEY (manga_id) REFERENCES manga(id),
+		UNIQUE(user_id, manga_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS friendships (
+		user_id    TEXT NOT NULL,
+		friend_id  TEXT NOT NULL,
+		status     TEXT DEFAULT 'pending',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, friend_id),
+		FOREIGN KEY (user_id) REFERENCES users(id),
+		FOREIGN KEY (friend_id) REFERENCES users(id),
+		CHECK (user_id < friend_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS shared_reading_lists (
+		id          TEXT PRIMARY KEY,
+		owner_id    TEXT NOT NULL,
+		title       TEXT NOT NULL,
+		description TEXT,
+		is_public   BOOLEAN DEFAULT 0,
+		manga_list  TEXT,
+		shared_with TEXT,
+		created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (owner_id) REFERENCES users(id)
+	);
+
+	CREATE TABLE IF NOT EXISTS activities (
+		id          TEXT PRIMARY KEY,
+		user_id     TEXT NOT NULL,
+		type        TEXT NOT NULL,
+		manga_id    TEXT,
+		review_id   TEXT,
+		friend_id   TEXT,
+		message     TEXT,
+		created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id),
+		FOREIGN KEY (manga_id) REFERENCES manga(id)
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_manga_title ON manga(title);
 	CREATE INDEX IF NOT EXISTS idx_manga_status ON manga(status);
 	CREATE INDEX IF NOT EXISTS idx_user_progress_user ON user_progress(user_id);
+	CREATE INDEX IF NOT EXISTS idx_reviews_manga ON reviews(manga_id);
+	CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
+	CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
+	CREATE INDEX IF NOT EXISTS idx_shared_lists_owner ON shared_reading_lists(owner_id);
+	CREATE INDEX IF NOT EXISTS idx_activities_user ON activities(user_id);
+	CREATE INDEX IF NOT EXISTS idx_activities_created ON activities(created_at DESC);
 	`
 
 	_, err := db.Exec(schema)

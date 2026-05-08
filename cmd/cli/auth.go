@@ -164,10 +164,6 @@ func authLogin(args []string) {
 	fmt.Println()
 	fmt.Println("Ready to use MangaHub! Try:")
 	fmt.Println("  mangahub manga search \"your favorite manga\"")
-	fmt.Println()
-	fmt.Println("💡 To use separate sessions per terminal, set a profile BEFORE login:")
-	fmt.Printf("  $env:MANGAHUB_PROFILE = \"%s\"    # PowerShell\n", loginResp.User.Username)
-	fmt.Printf("  export MANGAHUB_PROFILE=%s       # Bash\n", loginResp.User.Username)
 }
 
 func authLogout() {

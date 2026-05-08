@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -38,11 +39,12 @@ func init() {
 
 // getProfileName returns the active profile name.
 // Each terminal can set MANGAHUB_PROFILE=alice to use a different profile.
+// If not set, it defaults to session_<ppid> for terminal isolation.
 func getProfileName() string {
 	if p := os.Getenv("MANGAHUB_PROFILE"); p != "" {
 		return p
 	}
-	return "default"
+	return "session_" + strconv.Itoa(os.Getppid())
 }
 
 // getConfigPath returns the config file path for the active profile.
@@ -94,14 +96,8 @@ func clearToken() {
 func requireAuth() *Config {
 	cfg := loadConfig()
 	if cfg.Token == "" {
-		profile := getProfileName()
 		fmt.Println("✗ Not logged in. Please login first:")
 		fmt.Println("  mangahub auth login --username <username>")
-		if profile == "default" {
-			fmt.Println("\n💡 Tip: To use separate sessions per terminal, set a profile:")
-			fmt.Println("  $env:MANGAHUB_PROFILE = \"alice\"    # PowerShell")
-			fmt.Println("  export MANGAHUB_PROFILE=alice       # Bash")
-		}
 		os.Exit(1)
 	}
 	return cfg

@@ -104,3 +104,12 @@ func GetUserIDFromContext(c *gin.Context) (string, error) {
 	}
 	return userID.(string), nil
 }
+
+// GetUsernameFromContext extracts the username from the Gin context.
+func GetUsernameFromContext(c *gin.Context) (string, error) {
+	username, exists := c.Get("username")
+	if !exists {
+		return "", errors.New("username not found in context")
+	}
+	return username.(string), nil
+}

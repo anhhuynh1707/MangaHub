@@ -109,3 +109,97 @@ type ScrapedQuote struct {
 	Author string   `json:"author"`
 	Tags   []string `json:"tags"`
 }
+
+// --- Social & Community Features ---
+
+// Review represents a user's review and rating for a manga.
+type Review struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Username  string    `json:"username"` // Denormalized for display
+	MangaID   string    `json:"manga_id"`
+	Rating    int       `json:"rating"` // 1-10
+	Text      string    `json:"text"`
+	Helpful   int       `json:"helpful"` // Helpful votes count
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CreateReviewRequest is the payload for creating a review.
+type CreateReviewRequest struct {
+	MangaID string `json:"manga_id" binding:"required"`
+	Rating  int    `json:"rating" binding:"required,min=1,max=10"`
+	Text    string `json:"text" binding:"required,max=5000"`
+}
+
+// UpdateReviewRequest is the payload for updating a review.
+type UpdateReviewRequest struct {
+	Rating int    `json:"rating" binding:"omitempty,min=1,max=10"`
+	Text   string `json:"text" binding:"omitempty,max=5000"`
+}
+
+// Friendship represents a relationship between two users.
+type Friendship struct {
+	UserID    string    `json:"user_id"`
+	FriendID  string    `json:"friend_id"`
+	Status    string    `json:"status"` // "pending", "accepted", "blocked"
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// FriendInfo represents friend information with their reading activity.
+type FriendInfo struct {
+	UserID        string         `json:"user_id"`
+	Username      string         `json:"username"`
+	Status        string         `json:"status"` // online, away, offline
+	LastActive    time.Time      `json:"last_active"`
+	RecentReads   []UserProgress `json:"recent_reads"`
+	RecentReviews []Review       `json:"recent_reviews"`
+}
+
+// SharedReadingList represents a reading list shared with friends.
+type SharedReadingList struct {
+	ID          string    `json:"id"`
+	OwnerID     string    `json:"owner_id"`
+	OwnerName   string    `json:"owner_name"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	IsPublic    bool      `json:"is_public"`   // True = public, False = shared with specific friends
+	MangaList   []string  `json:"manga_list"`  // Array of manga IDs
+	SharedWith  []string  `json:"shared_with"` // Array of user IDs (if not public)
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// CreateSharedListRequest is the payload for creating a shared list.
+type CreateSharedListRequest struct {
+	Title       string   `json:"title" binding:"required,max=100"`
+	Description string   `json:"description" binding:"max=500"`
+	IsPublic    bool     `json:"is_public"`
+	MangaList   []string `json:"manga_list" binding:"required"`
+	SharedWith  []string `json:"shared_with"` // Friend user IDs
+}
+
+// Activity represents a user activity for the activity feed.
+type Activity struct {
+	ID         string    `json:"id"`
+	UserID     string    `json:"user_id"`
+	Username   string    `json:"username"`
+	Type       string    `json:"type"` // "started_manga", "completed_manga", "wrote_review", "added_friend"
+	MangaID    string    `json:"manga_id,omitempty"`
+	MangaTitle string    `json:"manga_title,omitempty"`
+	ReviewID   string    `json:"review_id,omitempty"`
+	FriendID   string    `json:"friend_id,omitempty"`
+	Message    string    `json:"message"` // Human-readable activity description
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// ActivityFeed represents the feed of activities from friends.
+type ActivityFeed struct {
+	Activities []Activity `json:"activities"`
+	Total      int        `json:"total"`
+}
+
+// CreateActivityRequest is the payload for creating a custom activity post.
+type CreateActivityRequest struct {
+	Message string `json:"message" binding:"required,max=500"`
+}

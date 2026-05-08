@@ -21,7 +21,10 @@ import (
 	"mangahub/pkg/database"
 	"mangahub/pkg/models"
 	"mangahub/pkg/utils"
-
+	"mangahub/internal/review"
+	"mangahub/internal/friend"
+	"mangahub/internal/sharedlist"
+	"mangahub/internal/activity"
 	"github.com/gin-gonic/gin"
 )
 
@@ -74,6 +77,19 @@ func main() {
 	userService := userPkg.NewService(userRepo)
 	mangaService := mangaPkg.NewService(mangaRepo)
 
+	// --- Social Feature Services ---
+	reviewRepo := review.NewRepository(db)
+	reviewService := review.NewService(reviewRepo)
+	
+	friendRepo := friend.NewRepository(db)
+	friendService := friend.NewService(friendRepo)
+	
+	sharedListRepo := sharedlist.NewRepository(db)
+	sharedListService := sharedlist.NewService(sharedListRepo)
+	
+	activityRepo := activity.NewRepository(db)
+	activityService := activity.NewService(activityRepo)
+
 	// --- MangaDex Client ---
 	mangaDexClient := mangaPkg.NewMangaDexClient()
 
@@ -83,6 +99,12 @@ func main() {
 	// --- Handlers ---
 	userHandler := userPkg.NewHandler(userService)
 	mangaHandler := mangaPkg.NewHandler(mangaService)
+	
+	// --- Social Feature Handlers ---
+	reviewHandler := review.NewHandler(reviewService, activityService, mangaService)
+	friendHandler := friend.NewHandler(friendService, activityService)
+	sharedListHandler := sharedlist.NewHandler(sharedListService, activityService)
+	activityHandler := activity.NewHandler(activityService)
 
 	// --- Service Configuration ---
 	enableTCPServer := os.Getenv("ENABLE_TCP_SERVER")
@@ -479,13 +501,125 @@ func main() {
 		})
 	}
 
+	// ============================================================
+	// REVIEW ROUTES
+	// ============================================================
+	mangaRoutes := r.Group("/manga")
+	{
+		// Public review endpoints
+		mangaRoutes.GET("/:id/reviews", reviewHandler.GetReviews)
+		mangaRoutes.GET("/:id/rating-stats", reviewHandler.GetRatingStats)
+
+		// Authenticated review creation
+		authMangaRoutes := mangaRoutes.Group("/:id/reviews")
+		authMangaRoutes.Use(auth.AuthMiddleware())
+		{
+			authMangaRoutes.POST("", reviewHandler.CreateReview)
+		}
+	}
+
+	reviewRoutes := r.Group("/reviews")
+	reviewRoutes.Use(auth.AuthMiddleware())
+	{
+		reviewRoutes.GET("/:review_id", reviewHandler.GetReview)
+		reviewRoutes.PUT("/:review_id", reviewHandler.UpdateReview)
+		reviewRoutes.DELETE("/:review_id", reviewHandler.DeleteReview)
+		reviewRoutes.POST("/:review_id/helpful", reviewHandler.MarkHelpful)
+	}
+
+	userReviewRoutes := r.Group("/users/reviews")
+	userReviewRoutes.Use(auth.AuthMiddleware())
+	{
+		userReviewRoutes.GET("", reviewHandler.GetMyReviews)
+	}
+
+	// ============================================================
+	// FRIEND ROUTES
+	// ============================================================
+	friendRoutes := r.Group("/friends")
+	friendRoutes.Use(auth.AuthMiddleware())
+	{
+		friendRoutes.POST("/add", friendHandler.AddFriend)
+		friendRoutes.POST("/:friend_id/accept", friendHandler.AcceptFriend)
+		friendRoutes.POST("/:friend_id/decline", friendHandler.DeclineFriend)
+		friendRoutes.DELETE("/:friend_id", friendHandler.RemoveFriend)
+		friendRoutes.POST("/:friend_id/block", friendHandler.BlockFriend)
+		friendRoutes.GET("/:friend_id/info", friendHandler.GetFriendInfo)
+		friendRoutes.POST("/:friend_id/check", friendHandler.CheckFriendship)
+	}
+
+	userFriendRoutes := r.Group("/users")
+	userFriendRoutes.Use(auth.AuthMiddleware())
+	{
+		userFriendRoutes.GET("/friends", friendHandler.GetFriends)
+		userFriendRoutes.GET("/friends/pending", friendHandler.GetPendingRequests)
+		userFriendRoutes.GET("/friends/count", friendHandler.GetFriendCount)
+	}
+
+	// ============================================================
+	// SHARED READING LIST ROUTES
+	// ============================================================
+	listPublicRoutes := r.Group("/reading-lists")
+	{
+		listPublicRoutes.GET("/public", sharedListHandler.GetPublicLists)
+		listPublicRoutes.GET("/:list_id", sharedListHandler.GetList)
+	}
+
+	listAuthRoutes := r.Group("/reading-lists")
+	listAuthRoutes.Use(auth.AuthMiddleware())
+	{
+		listAuthRoutes.POST("/create", sharedListHandler.CreateList)
+		listAuthRoutes.GET("/mine", sharedListHandler.GetMyLists)
+		listAuthRoutes.GET("/subscribed", sharedListHandler.GetSubscribedLists)
+		listAuthRoutes.PUT("/:list_id", sharedListHandler.UpdateList)
+		listAuthRoutes.DELETE("/:list_id", sharedListHandler.DeleteList)
+		listAuthRoutes.POST("/:list_id/subscribe", sharedListHandler.SubscribeToList)
+		listAuthRoutes.DELETE("/:list_id/subscribe", sharedListHandler.UnsubscribeFromList)
+		listAuthRoutes.POST("/:list_id/manga", sharedListHandler.AddMangaToList)
+		listAuthRoutes.DELETE("/:list_id/manga/:manga_id", sharedListHandler.RemoveMangaFromList)
+	}
+
+	// ============================================================
+	// ACTIVITY FEED ROUTES
+	// ============================================================
+	feedPublicRoutes := r.Group("/feed")
+	{
+		feedPublicRoutes.GET("/filters", activityHandler.GetActivityFilters)
+		feedPublicRoutes.GET("/trending", activityHandler.GetTrendingActivity)
+	}
+
+	feedAuthRoutes := r.Group("/feed")
+	feedAuthRoutes.Use(auth.AuthMiddleware())
+	{
+		feedAuthRoutes.POST("/activities", activityHandler.PostActivity)
+		feedAuthRoutes.GET("/activities", activityHandler.GetActivityFeed)
+		feedAuthRoutes.GET("/timeline", activityHandler.GetTimelineView)
+		feedAuthRoutes.GET("/search", activityHandler.SearchActivities)
+		feedAuthRoutes.GET("/stats", activityHandler.GetActivityStats)
+		feedAuthRoutes.DELETE("/clear", activityHandler.ClearActivityFeed)
+		feedAuthRoutes.GET("/notifications", activityHandler.GetActivityNotifications)
+		feedAuthRoutes.GET("/stream", activityHandler.FollowActivityStream)
+	}
+
+	userActivityRoutes := r.Group("/users")
+	userActivityRoutes.Use(auth.AuthMiddleware())
+	{
+		userActivityRoutes.GET("/:user_id/activities", activityHandler.GetUserActivities)
+	}
+
+	// ============================================================
 	// --- Start server ---
+	// ============================================================
 	log.Printf("🚀 MangaHub API server starting on port %s", port)
 	log.Printf("📖 Health check: http://localhost:%s/health", port)
 	log.Printf("📚 Endpoints: POST /auth/register, POST /auth/login, GET /manga, GET /manga/:id")
 	log.Printf("📚 Endpoints: POST /users/library, GET /users/library, PUT /users/progress")
 	log.Printf("📢 Endpoints: POST /notify/broadcast, GET /notify/status")
 	log.Printf("💬 Endpoints: GET /ws/chat (WebSocket), GET /chat/history")
+	log.Printf("⭐ Endpoints: POST /manga/:id/reviews, GET /manga/:id/reviews, PUT /reviews/:review_id")
+	log.Printf("👥 Endpoints: POST /friends/add, GET /users/friends, POST /friends/:friend_id/accept")
+	log.Printf("📚 Endpoints: POST /reading-lists/create, GET /reading-lists/public, POST /reading-lists/:list_id/subscribe")
+	log.Printf("📺 Endpoints: GET /feed/activities, GET /feed/timeline, GET /users/:user_id/activities")
 
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

@@ -32,6 +32,14 @@ func main() {
 		handleGRPC(os.Args[2:])
 	case "server":
 		handleServer(os.Args[2:])
+	case "review":
+		handleReview(os.Args[2:])
+	case "friend":
+		handleFriend(os.Args[2:])
+	case "sharedlist":
+		handleSharedList(os.Args[2:])
+	case "feed":
+		handleFeed(os.Args[2:])
 	case "help", "--help", "-h":
 		printUsage()
 	case "version", "--version", "-v":
@@ -63,6 +71,10 @@ func printUsage() {
    chat        WebSocket chat (join, send, history)
    grpc        gRPC internal service (manga get/search, progress update)
    server      Server management (status, start)
+   review      User reviews and ratings (add, list, mine)
+   friend      Friend system (add, accept, list, pending)
+   sharedlist  Shared reading lists (create, mine, public)
+   feed        Activity feed (view, mine)
 
  EXAMPLES:
    mangahub auth register --username alice

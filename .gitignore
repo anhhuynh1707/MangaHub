@@ -50,3 +50,4 @@ config.json
 
 # --- Documentation ---
 *.md
+test_social_features.ps1
