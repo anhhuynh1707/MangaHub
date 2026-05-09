@@ -20,9 +20,11 @@ func handleFriend(args []string) {
 		friendList(args[1:])
 	case "pending":
 		friendPending(args[1:])
+	case "remove":
+		friendRemove(args[1:])
 	default:
 		fmt.Printf("✗ Unknown friend command: '%s'\n", args[0])
-		fmt.Println("Available: add, accept, list, pending")
+		fmt.Println("Available: add, accept, list, pending, remove")
 	}
 }
 
@@ -145,4 +147,25 @@ func friendPending(args []string) {
 	for _, id := range data.PendingRequests {
 		fmt.Printf("- %s (Accept with: mangahub friend accept --id %s)\n", id, id)
 	}
+}
+
+func friendRemove(args []string) {
+	friendID := parseFlag(args, "id")
+	if friendID == "" {
+		fmt.Println("Usage: mangahub friend remove --id <user_id>")
+		return
+	}
+
+	resp, err := apiDelete("/friends/" + friendID)
+	if err != nil {
+		fmt.Printf("✗ Failed to remove friend: %v\n", err)
+		return
+	}
+
+	if !resp.Success {
+		fmt.Printf("✗ %s\n", resp.Error)
+		return
+	}
+
+	fmt.Printf("✓ Friend '%s' has been removed.\n", friendID)
 }

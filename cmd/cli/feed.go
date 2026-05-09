@@ -25,7 +25,12 @@ func handleFeed(args []string) {
 }
 
 func feedView(args []string) {
-	resp, err := apiGet("/feed/activities")
+	limit := parseFlag(args, "limit")
+	if limit == "" {
+		limit = "20"
+	}
+
+	resp, err := apiGet("/feed/activities?limit=" + limit)
 	if err != nil {
 		fmt.Printf("✗ Failed to retrieve activity feed: %v\n", err)
 		return
@@ -40,6 +45,11 @@ func feedView(args []string) {
 }
 
 func feedMine(args []string) {
+	limit := parseFlag(args, "limit")
+	if limit == "" {
+		limit = "20"
+	}
+
 	cfg := loadConfig()
 	if cfg.UserID == "" {
 		// fallback to view /users/activities if there's no user id locally
@@ -48,7 +58,7 @@ func feedMine(args []string) {
 		return
 	}
 
-	resp, err := apiGet("/users/" + cfg.UserID + "/activities")
+	resp, err := apiGet("/users/" + cfg.UserID + "/activities?limit=" + limit)
 	if err != nil {
 		fmt.Printf("✗ Failed to retrieve your activities: %v\n", err)
 		return

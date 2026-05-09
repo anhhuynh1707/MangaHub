@@ -51,7 +51,7 @@ func (h *Handler) PostActivity(c *gin.Context) {
 
 // GetActivityFeed handles GET /feed/activities
 func (h *Handler) GetActivityFeed(c *gin.Context) {
-	userID, err := auth.GetUserIDFromContext(c)
+	_, err := auth.GetUserIDFromContext(c)
 	if err != nil {
 		utils.UnauthorizedResponse(c, "Unauthorized")
 		return
@@ -72,7 +72,7 @@ func (h *Handler) GetActivityFeed(c *gin.Context) {
 	}
 
 	offset := (page - 1) * limit
-	activities, err := h.service.GetFriendsActivityFeed(userID, limit, offset)
+	activities, err := h.service.GetAllActivities(limit, offset)
 	if err != nil {
 		utils.InternalServerErrorResponse(c, err.Error())
 		return

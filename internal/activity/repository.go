@@ -97,6 +97,47 @@ func (r *Repository) GetUserActivities(userID string, limit, offset int) ([]mode
 	return activities, rows.Err()
 }
 
+// GetAllActivities retrieves activities from all users globally.
+func (r *Repository) GetAllActivities(limit, offset int) ([]models.Activity, error) {
+	rows, err := r.db.Query(
+		`SELECT id, user_id, type, manga_id, review_id, friend_id, message, created_at
+		 FROM activities
+		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch global activities: %w", err)
+	}
+	defer rows.Close()
+
+	var activities []models.Activity
+	for rows.Next() {
+		var activity models.Activity
+		var mangaID, reviewID, friendID sql.NullString
+
+		err := rows.Scan(&activity.ID, &activity.UserID, &activity.Type, &mangaID,
+			&reviewID, &friendID, &activity.Message, &activity.CreatedAt)
+		if err != nil {
+			log.Printf("Error scanning activity: %v", err)
+			continue
+		}
+
+		if mangaID.Valid {
+			activity.MangaID = mangaID.String
+		}
+		if reviewID.Valid {
+			activity.ReviewID = reviewID.String
+		}
+		if friendID.Valid {
+			activity.FriendID = friendID.String
+		}
+
+		activities = append(activities, activity)
+	}
+
+	return activities, rows.Err()
+}
+
 // GetFriendsActivities retrieves activities from a user's friends.
 // This is used for the activity feed.
 func (r *Repository) GetFriendsActivities(userID string, limit, offset int) ([]models.Activity, error) {

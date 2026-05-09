@@ -57,6 +57,11 @@ func (s *Service) GetUserActivities(userID string, limit, offset int) ([]models.
 	return s.repo.GetUserActivities(userID, limit, offset)
 }
 
+// GetAllActivities retrieves all activities from all users globally.
+func (s *Service) GetAllActivities(limit, offset int) ([]models.Activity, error) {
+	return s.repo.GetAllActivities(limit, offset)
+}
+
 // GetFriendsActivityFeed retrieves the activity feed for a user's friends.
 func (s *Service) GetFriendsActivityFeed(userID string, limit, offset int) ([]models.Activity, error) {
 	return s.repo.GetFriendsActivities(userID, limit, offset)
