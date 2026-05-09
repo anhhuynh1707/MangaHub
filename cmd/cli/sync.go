@@ -22,17 +22,21 @@ type tcpMessage struct {
 	Token          string `json:"token,omitempty"`
 	Timestamp      int64  `json:"timestamp,omitempty"`
 	ConnectedUsers int    `json:"connected_users,omitempty"`
+	DeviceID       string `json:"device_id,omitempty"`
+	Strategy       string `json:"strategy,omitempty"`
 }
 
 func handleSync(args []string) {
 	if len(args) == 0 {
-		fmt.Println("Usage: mangahub sync <connect|disconnect|status|monitor>")
+		fmt.Println("Usage: mangahub sync <connect|disconnect|status|monitor|conflicts|strategy>")
 		fmt.Println()
 		fmt.Println("Commands:")
 		fmt.Println("  connect     Connect to TCP sync server (interactive)")
 		fmt.Println("  disconnect  Disconnect from sync server")
 		fmt.Println("  status      Check TCP server status and connected users")
 		fmt.Println("  monitor     Watch live progress updates (read-only)")
+		fmt.Println("  conflicts   View recent conflict resolution log")
+		fmt.Println("  strategy    View or change conflict resolution strategy")
 		return
 	}
 
@@ -43,11 +47,15 @@ func handleSync(args []string) {
 		syncStatus()
 	case "monitor":
 		syncMonitor()
+	case "conflicts":
+		syncConflicts()
+	case "strategy":
+		syncStrategy(args[1:])
 	case "disconnect":
 		fmt.Println("✓ Disconnected from sync server")
 	default:
 		fmt.Printf("✗ Unknown sync command: '%s'\n", args[0])
-		fmt.Println("Available: connect, disconnect, status, monitor")
+		fmt.Println("Available: connect, disconnect, status, monitor, conflicts, strategy")
 	}
 }
 
@@ -128,6 +136,8 @@ func syncConnect() {
 				fmt.Printf("[%s] 🏓 Pong\n", ts)
 			case "status":
 				fmt.Printf("[%s] 📊 %s\n", ts, msg.Message)
+			case "conflict":
+				fmt.Printf("[%s] ⚠️  CONFLICT [%s]: %s (ch.%d applied)\n", ts, msg.Strategy, msg.Message, msg.Chapter)
 			case "error":
 				fmt.Printf("[%s] ✗ %s\n", ts, msg.Message)
 			}
@@ -152,14 +162,22 @@ func syncConnect() {
 				}
 				ch := 0
 				fmt.Sscanf(parts[2], "%d", &ch)
-				sendTCP(conn, tcpMessage{Type: "progress", MangaID: parts[1], Chapter: ch})
+				deviceID := "cli-" + cfg.Username
+				sendTCP(conn, tcpMessage{Type: "progress", MangaID: parts[1], Chapter: ch, DeviceID: deviceID})
 				msgsSent++
-				fmt.Printf("[%s] → Broadcasting update: %s → Chapter %d\n", time.Now().Format("15:04:05"), parts[1], ch)
+				fmt.Printf("[%s] → Broadcasting update: %s → Chapter %d (device: %s)\n", time.Now().Format("15:04:05"), parts[1], ch, deviceID)
 			case "ping":
 				sendTCP(conn, tcpMessage{Type: "ping"})
 				msgsSent++
 			case "status":
 				sendTCP(conn, tcpMessage{Type: "status"})
+				msgsSent++
+			case "strategy":
+				if len(parts) < 2 {
+					fmt.Println("Usage: strategy <last_write_wins|merge|user_choice>")
+					continue
+				}
+				sendTCP(conn, tcpMessage{Type: "set_strategy", Strategy: parts[1]})
 				msgsSent++
 			case "quit", "exit":
 				sendTCP(conn, tcpMessage{Type: "disconnect"})
@@ -168,7 +186,7 @@ func syncConnect() {
 				fmt.Printf("  Session: %s | Sent: %d | Received: %d\n", uptime, msgsSent, msgsReceived)
 				os.Exit(0)
 			default:
-				fmt.Println("Commands: progress <manga-id> <chapter> | ping | status | quit")
+				fmt.Println("Commands: progress <manga-id> <chapter> | ping | status | strategy <name> | quit")
 			}
 		}
 	}()
@@ -314,6 +332,166 @@ func sendTCP(conn net.Conn, msg tcpMessage) {
 	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	conn.Write(data)
 }
+
+// syncConflicts queries the TCP server directly for the conflict resolution log.
+func syncConflicts() {
+	cfg := requireAuth()
+
+	conn, scanner, err := tcpQuickConnect(cfg.Token)
+	if err != nil {
+		fmt.Printf("✗ %v\n", err)
+		return
+	}
+	defer conn.Close()
+
+	// Request conflicts
+	sendTCP(conn, tcpMessage{Type: "get_conflicts"})
+
+	if scanner.Scan() {
+		var msg tcpMessage
+		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
+			fmt.Printf("✗ Failed to parse response: %v\n", err)
+			return
+		}
+
+		if msg.Type == "error" {
+			fmt.Printf("✗ %s\n", msg.Message)
+			return
+		}
+
+		conflictCount := msg.Chapter // count stored in chapter field
+
+		fmt.Printf("⚠️  Conflict Resolution Log (Total: %d)\n", conflictCount)
+		fmt.Printf("   Active Strategy: %s\n\n", msg.Strategy)
+
+		if conflictCount == 0 {
+			fmt.Println("No conflicts recorded yet.")
+			return
+		}
+
+		// Parse the conflicts from the message
+		var conflicts []struct {
+			UserID          string `json:"user_id"`
+			MangaID         string `json:"manga_id"`
+			ExistingChapter int    `json:"existing_chapter"`
+			ExistingDevice  string `json:"existing_device"`
+			IncomingChapter int    `json:"incoming_chapter"`
+			IncomingDevice  string `json:"incoming_device"`
+			Resolution      struct {
+				Strategy   string `json:"strategy"`
+				Resolution string `json:"resolution"`
+			} `json:"resolution"`
+		}
+
+		if err := json.Unmarshal([]byte(msg.Message), &conflicts); err != nil {
+			fmt.Printf("✗ Failed to parse conflicts: %v\n", err)
+			return
+		}
+
+		headers := []string{"Manga", "Existing", "Incoming", "Strategy", "Resolution"}
+		var rows [][]string
+		for _, c := range conflicts {
+			rows = append(rows, []string{
+				c.MangaID,
+				fmt.Sprintf("ch.%d (%s)", c.ExistingChapter, c.ExistingDevice),
+				fmt.Sprintf("ch.%d (%s)", c.IncomingChapter, c.IncomingDevice),
+				c.Resolution.Strategy,
+				c.Resolution.Resolution,
+			})
+		}
+		printTable(headers, rows)
+	}
+}
+
+// syncStrategy views or changes the conflict resolution strategy via direct TCP.
+func syncStrategy(args []string) {
+	cfg := requireAuth()
+
+	conn, scanner, err := tcpQuickConnect(cfg.Token)
+	if err != nil {
+		fmt.Printf("✗ %v\n", err)
+		return
+	}
+	defer conn.Close()
+
+	if len(args) == 0 {
+		// GET current strategy
+		sendTCP(conn, tcpMessage{Type: "get_strategy"})
+
+		if scanner.Scan() {
+			var msg tcpMessage
+			json.Unmarshal(scanner.Bytes(), &msg)
+
+			if msg.Type == "error" {
+				fmt.Printf("✗ %s\n", msg.Message)
+				return
+			}
+
+			fmt.Printf("🔧 Conflict Resolution Strategy\n\n")
+			fmt.Printf("  Current:   %s\n", msg.Strategy)
+			fmt.Printf("  Available: %s\n", strings.Join([]string{"last_write_wins", "merge", "user_choice"}, ", "))
+			fmt.Println()
+			fmt.Println("Strategies:")
+			fmt.Println("  last_write_wins  Accept the latest update, overwrite previous")
+			fmt.Println("  merge            Keep the higher chapter number (furthest progress)")
+			fmt.Println("  user_choice      Reject conflicting updates, notify user to decide")
+			fmt.Println()
+			fmt.Println("Change with: mangahub sync strategy <name>")
+		}
+		return
+	}
+
+	// SET strategy
+	strategy := args[0]
+	sendTCP(conn, tcpMessage{Type: "set_strategy", Strategy: strategy})
+
+	if scanner.Scan() {
+		var msg tcpMessage
+		json.Unmarshal(scanner.Bytes(), &msg)
+
+		if msg.Type == "error" {
+			fmt.Printf("✗ %s\n", msg.Message)
+			return
+		}
+
+		fmt.Printf("✓ Conflict resolution strategy changed to '%s'\n", strategy)
+	}
+
+	// Also update the HTTP API server's copy (best-effort)
+	body := map[string]string{"strategy": strategy}
+	apiPut("/sync/strategy", body)
+}
+
+// tcpQuickConnect opens a TCP connection, reads the welcome, authenticates,
+// and returns the connection + scanner ready for one request/response.
+func tcpQuickConnect(token string) (net.Conn, *bufio.Scanner, error) {
+	conn, err := net.DialTimeout("tcp", "localhost:9090", 5*time.Second)
+	if err != nil {
+		return nil, nil, fmt.Errorf("TCP server unreachable at localhost:9090: %w", err)
+	}
+
+	scanner := bufio.NewScanner(conn)
+	scanner.Buffer(make([]byte, 0, 64*1024), 64*1024)
+
+	// Read welcome
+	if scanner.Scan() {
+		// discard welcome
+	}
+
+	// Authenticate
+	sendTCP(conn, tcpMessage{Type: "auth", Token: token})
+	if scanner.Scan() {
+		var msg tcpMessage
+		json.Unmarshal(scanner.Bytes(), &msg)
+		if msg.Type == "error" {
+			conn.Close()
+			return nil, nil, fmt.Errorf("TCP authentication failed: %s", msg.Message)
+		}
+	}
+
+	return conn, scanner, nil
+}
+
 
 func handleServer(args []string) {
 	if len(args) == 0 {

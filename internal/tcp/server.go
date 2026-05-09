@@ -19,21 +19,23 @@ type ProgressPersister interface {
 // ProgressSyncServer is the TCP server for broadcasting reading progress updates.
 // Spec-required struct: accepts multiple connections and broadcasts ProgressUpdate messages.
 type ProgressSyncServer struct {
-	Port        string
-	Connections map[string]net.Conn // user_id -> connection
-	Broadcast   chan models.ProgressUpdate
-	Persister   ProgressPersister // saves progress to DB
-	mu          sync.RWMutex
-	listener    net.Listener
-	startTime   time.Time
+	Port             string
+	Connections      map[string]net.Conn // user_id -> connection
+	Broadcast        chan models.ProgressUpdate
+	Persister        ProgressPersister // saves progress to DB
+	ConflictResolver *ConflictResolver // handles concurrent update conflicts
+	mu               sync.RWMutex
+	listener         net.Listener
+	startTime        time.Time
 }
 
 // NewProgressSyncServer creates a new TCP progress sync server.
 func NewProgressSyncServer(port string) *ProgressSyncServer {
 	return &ProgressSyncServer{
-		Port:        port,
-		Connections: make(map[string]net.Conn),
-		Broadcast:   make(chan models.ProgressUpdate, 100),
+		Port:             port,
+		Connections:      make(map[string]net.Conn),
+		Broadcast:        make(chan models.ProgressUpdate, 100),
+		ConflictResolver: NewConflictResolver("last_write_wins"),
 	}
 }
 

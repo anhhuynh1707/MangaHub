@@ -103,6 +103,27 @@ type ProgressUpdate struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
+// ConflictResolution tracks how concurrent progress update conflicts are resolved.
+type ConflictResolution struct {
+	Strategy   string `json:"strategy"`   // "last_write_wins", "merge", "user_choice"
+	Timestamp  int64  `json:"timestamp"`
+	DeviceID   string `json:"device_id"`
+	Resolution string `json:"resolution"` // Human-readable description of what happened
+}
+
+// ProgressConflict captures a detected conflict between two concurrent updates.
+type ProgressConflict struct {
+	UserID          string `json:"user_id"`
+	MangaID         string `json:"manga_id"`
+	ExistingChapter int    `json:"existing_chapter"`
+	ExistingDevice  string `json:"existing_device"`
+	ExistingTime    int64  `json:"existing_time"`
+	IncomingChapter int    `json:"incoming_chapter"`
+	IncomingDevice  string `json:"incoming_device"`
+	IncomingTime    int64  `json:"incoming_time"`
+	Resolution      ConflictResolution `json:"resolution"`
+}
+
 // ScrapedQuote represents a quote scraped from practice sites.
 type ScrapedQuote struct {
 	Text   string   `json:"text"`

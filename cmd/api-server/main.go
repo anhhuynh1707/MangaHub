@@ -307,6 +307,68 @@ func main() {
 				"your_user_id":    userID,
 			})
 		})
+
+		// GET /sync/conflicts — View conflict resolution log
+		syncRoutes.GET("/conflicts", func(c *gin.Context) {
+			if server.TCPServer == nil {
+				utils.SuccessResponse(c, "No TCP server available", gin.H{
+					"conflicts": []interface{}{},
+					"count":     0,
+				})
+				return
+			}
+
+			conflicts := server.TCPServer.ConflictResolver.GetConflictLog()
+			strategy := server.TCPServer.ConflictResolver.GetStrategy()
+
+			utils.SuccessResponse(c, "Conflict resolution log", gin.H{
+				"conflicts": conflicts,
+				"count":     len(conflicts),
+				"strategy":  strategy,
+			})
+		})
+
+		// GET /sync/strategy — View current strategy
+		syncRoutes.GET("/strategy", func(c *gin.Context) {
+			strategy := "last_write_wins"
+			if server.TCPServer != nil {
+				strategy = server.TCPServer.ConflictResolver.GetStrategy()
+			}
+
+			utils.SuccessResponse(c, "Current conflict resolution strategy", gin.H{
+				"strategy":           strategy,
+				"available_strategies": []string{"last_write_wins", "merge", "user_choice"},
+			})
+		})
+
+		// PUT /sync/strategy — Change strategy at runtime
+		syncRoutes.PUT("/strategy", func(c *gin.Context) {
+			var req struct {
+				Strategy string `json:"strategy" binding:"required"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				utils.BadRequestResponse(c, "Invalid request: strategy is required")
+				return
+			}
+
+			validStrategies := map[string]bool{
+				"last_write_wins": true,
+				"merge":           true,
+				"user_choice":     true,
+			}
+			if !validStrategies[req.Strategy] {
+				utils.BadRequestResponse(c, fmt.Sprintf("Invalid strategy '%s'. Valid: last_write_wins, merge, user_choice", req.Strategy))
+				return
+			}
+
+			if server.TCPServer != nil {
+				server.TCPServer.ConflictResolver.SetStrategy(req.Strategy)
+			}
+
+			utils.SuccessResponse(c, fmt.Sprintf("Strategy changed to '%s'", req.Strategy), gin.H{
+				"strategy": req.Strategy,
+			})
+		})
 	}
 
 	// Notification endpoints (authenticated) — used by CLI `mangahub notify send`

@@ -14,10 +14,11 @@ import (
 // Protocol specification:
 //
 //	Client → Server: {"type":"auth","token":"jwt-token"}\n
-//	Client → Server: {"type":"progress","manga_id":"one-piece","chapter":1095}\n
+//	Client → Server: {"type":"progress","manga_id":"one-piece","chapter":1095,"device_id":"cli-alice"}\n
 //	Client → Server: {"type":"connect","user_id":"user123"}\n
 //	Client → Server: {"type":"disconnect"}\n
 //	Client → Server: {"type":"ping"}\n
+//	Client → Server: {"type":"set_strategy","strategy":"merge"}\n
 //	Server → Client: {"type":"welcome","message":"Connected to TCP sync"}\n
 //	Server → Client: {"type":"broadcast","user_id":"user456","manga_id":"naruto","chapter":700}\n
 //	Server → Client: {"type":"auth","user_id":"user123","username":"alice"}\n
@@ -26,8 +27,9 @@ import (
 //	Server → Client: {"type":"error","message":"..."}\n
 //	Server → Client: {"type":"pong"}\n
 //	Server → Client: {"type":"status","message":"...","connected_users":3}\n
+//	Server → Client: {"type":"conflict","manga_id":"...","chapter":N,"message":"..."}\n
 type TCPMessage struct {
-	Type           string `json:"type"`                      // auth, connect, disconnect, progress, broadcast, welcome, error, ping, pong, user_joined, user_left, status
+	Type           string `json:"type"`                      // auth, connect, disconnect, progress, broadcast, welcome, error, ping, pong, user_joined, user_left, status, conflict, set_strategy
 	UserID         string `json:"user_id,omitempty"`
 	Username       string `json:"username,omitempty"`
 	MangaID        string `json:"manga_id,omitempty"`
@@ -36,6 +38,8 @@ type TCPMessage struct {
 	Token          string `json:"token,omitempty"`            // JWT token for authentication
 	Timestamp      int64  `json:"timestamp,omitempty"`
 	ConnectedUsers int    `json:"connected_users,omitempty"`  // For status responses
+	DeviceID       string `json:"device_id,omitempty"`        // Client device/session identifier for conflict resolution
+	Strategy       string `json:"strategy,omitempty"`         // Conflict resolution strategy
 }
 
 // ValidMessageTypes lists all valid message types in the protocol.
@@ -44,6 +48,7 @@ var ValidMessageTypes = []string{
 	"broadcast", "welcome", "error",
 	"ping", "pong", "status",
 	"user_joined", "user_left",
+	"conflict", "set_strategy",
 }
 
 // EncodeMessage serializes a TCPMessage to newline-delimited JSON bytes.

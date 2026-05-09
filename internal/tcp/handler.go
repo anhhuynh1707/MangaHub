@@ -58,6 +58,15 @@ func (s *ProgressSyncServer) handleConnection(conn net.Conn) {
 		case "progress":
 			s.handleProgress(conn, msg, authenticatedUserID, authenticatedUsername)
 
+		case "set_strategy":
+			s.handleSetStrategy(conn, msg, authenticatedUserID)
+
+		case "get_strategy":
+			s.handleGetStrategy(conn, authenticatedUserID)
+
+		case "get_conflicts":
+			s.handleGetConflicts(conn, authenticatedUserID)
+
 		case "disconnect":
 			log.Printf("TCP: User %s requested disconnect", authenticatedUsername)
 			goto cleanup
@@ -75,7 +84,7 @@ func (s *ProgressSyncServer) handleConnection(conn net.Conn) {
 
 		default:
 			s.sendMessage(conn, NewErrorMessage(
-				fmt.Sprintf("Unknown message type: %s. Valid types: auth, connect, progress, disconnect, ping, status", msg.Type),
+				fmt.Sprintf("Unknown message type: %s. Valid types: auth, connect, progress, disconnect, ping, status, set_strategy, get_strategy, get_conflicts", msg.Type),
 			))
 		}
 	}
@@ -156,7 +165,7 @@ func (s *ProgressSyncServer) handleAuth(conn net.Conn, msg *TCPMessage, remoteAd
 	return claims.UserID, claims.Username
 }
 
-// handleProgress processes a progress update message.
+// handleProgress processes a progress update message with conflict resolution.
 func (s *ProgressSyncServer) handleProgress(conn net.Conn, msg *TCPMessage, userID, username string) {
 	// Requires authentication
 	if userID == "" {
@@ -171,11 +180,38 @@ func (s *ProgressSyncServer) handleProgress(conn net.Conn, msg *TCPMessage, user
 		return
 	}
 
-	// Persist to database — broadcast only if save succeeds
+	// Determine device ID — use provided value or fall back to remote address
+	deviceID := msg.DeviceID
+	if deviceID == "" {
+		deviceID = conn.RemoteAddr().String()
+	}
+
+	// --- Conflict Resolution ---
+	result := s.ConflictResolver.Resolve(userID, msg.MangaID, msg.Chapter, deviceID)
+
+	if !result.Accepted {
+		// Conflict with user_choice strategy — reject and notify
+		s.sendMessage(conn, TCPMessage{
+			Type:      "conflict",
+			MangaID:   msg.MangaID,
+			Chapter:   result.FinalChapter,
+			DeviceID:  deviceID,
+			Strategy:  s.ConflictResolver.GetStrategy(),
+			Message:   result.Message,
+			Timestamp: time.Now().Unix(),
+		})
+		log.Printf("TCP: Progress update REJECTED for %s: %s ch.%d (%s)", username, msg.MangaID, msg.Chapter, result.Message)
+		return
+	}
+
+	// Use the resolved chapter (may differ from incoming in merge mode)
+	finalChapter := result.FinalChapter
+
+	// Persist to database
 	if s.Persister != nil {
 		_, err := s.Persister.UpdateProgress(userID, &models.UpdateProgressRequest{
 			MangaID:        msg.MangaID,
-			CurrentChapter: msg.Chapter,
+			CurrentChapter: finalChapter,
 			Status:         "reading",
 		})
 		if err != nil {
@@ -185,17 +221,30 @@ func (s *ProgressSyncServer) handleProgress(conn net.Conn, msg *TCPMessage, user
 		}
 	}
 
-	// Push to broadcast channel (only reached if save succeeded)
+	// Notify sender if a conflict was detected and auto-resolved
+	if result.Conflict != nil {
+		s.sendMessage(conn, TCPMessage{
+			Type:      "conflict",
+			MangaID:   msg.MangaID,
+			Chapter:   finalChapter,
+			DeviceID:  deviceID,
+			Strategy:  s.ConflictResolver.GetStrategy(),
+			Message:   fmt.Sprintf("Conflict auto-resolved (%s): ch.%d applied", s.ConflictResolver.GetStrategy(), finalChapter),
+			Timestamp: time.Now().Unix(),
+		})
+	}
+
+	// Push to broadcast channel
 	update := models.ProgressUpdate{
 		UserID:    userID,
 		MangaID:   msg.MangaID,
-		Chapter:   msg.Chapter,
+		Chapter:   finalChapter,
 		Timestamp: time.Now().Unix(),
 	}
 
 	s.Broadcast <- update
 
-	log.Printf("TCP: Progress update from %s: %s ch.%d (saved & broadcast)", username, msg.MangaID, msg.Chapter)
+	log.Printf("TCP: Progress update from %s: %s ch.%d (saved & broadcast)", username, msg.MangaID, finalChapter)
 }
 
 // handleStatusRequest responds to a client's status inquiry.
@@ -226,4 +275,75 @@ func (s *ProgressSyncServer) handleStatusRequest(conn net.Conn, userID, username
 	msg.Message += " | Users: " + string(data)
 
 	s.sendMessage(conn, msg)
+}
+
+// handleSetStrategy allows a client to change the conflict resolution strategy.
+func (s *ProgressSyncServer) handleSetStrategy(conn net.Conn, msg *TCPMessage, userID string) {
+	if userID == "" {
+		s.sendMessage(conn, NewErrorMessage("You must authenticate first"))
+		return
+	}
+
+	strategy := msg.Strategy
+	if strategy == "" {
+		strategy = msg.Message // fallback: accept strategy in message field
+	}
+
+	validStrategies := map[string]bool{
+		"last_write_wins": true,
+		"merge":           true,
+		"user_choice":     true,
+	}
+
+	if !validStrategies[strategy] {
+		s.sendMessage(conn, NewErrorMessage(
+			fmt.Sprintf("Invalid strategy '%s'. Valid: last_write_wins, merge, user_choice", strategy),
+		))
+		return
+	}
+
+	s.ConflictResolver.SetStrategy(strategy)
+
+	s.sendMessage(conn, TCPMessage{
+		Type:      "status",
+		Strategy:  strategy,
+		Message:   fmt.Sprintf("Conflict resolution strategy set to '%s'", strategy),
+		Timestamp: time.Now().Unix(),
+	})
+}
+
+// handleGetStrategy responds with the current conflict resolution strategy.
+func (s *ProgressSyncServer) handleGetStrategy(conn net.Conn, userID string) {
+	if userID == "" {
+		s.sendMessage(conn, NewErrorMessage("You must authenticate first"))
+		return
+	}
+
+	strategy := s.ConflictResolver.GetStrategy()
+	s.sendMessage(conn, TCPMessage{
+		Type:      "strategy_info",
+		Strategy:  strategy,
+		Message:   fmt.Sprintf("Current strategy: %s", strategy),
+		Timestamp: time.Now().Unix(),
+	})
+}
+
+// handleGetConflicts responds with the conflict resolution log as JSON.
+func (s *ProgressSyncServer) handleGetConflicts(conn net.Conn, userID string) {
+	if userID == "" {
+		s.sendMessage(conn, NewErrorMessage("You must authenticate first"))
+		return
+	}
+
+	conflicts := s.ConflictResolver.GetConflictLog()
+	strategy := s.ConflictResolver.GetStrategy()
+
+	conflictsJSON, _ := json.Marshal(conflicts)
+	s.sendMessage(conn, TCPMessage{
+		Type:      "conflicts_info",
+		Strategy:  strategy,
+		Message:   string(conflictsJSON),
+		Chapter:   len(conflicts), // reuse Chapter field as count
+		Timestamp: time.Now().Unix(),
+	})
 }
