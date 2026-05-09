@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -56,6 +57,46 @@ func (c *ProgressSyncClient) SendProgressUpdate(update models.ProgressUpdate) er
 	}
 
 	return nil
+}
+
+// RequestStatus requests the current server status from the remote TCP server.
+func (c *ProgressSyncClient) RequestStatus() (*TCPMessage, error) {
+	if c.conn == nil {
+		return nil, fmt.Errorf("TCP client not connected")
+	}
+
+	// Send status request
+	msg := TCPMessage{
+		Type:      "status",
+		Timestamp: time.Now().Unix(),
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	data = append(data, '\n')
+
+	c.conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if _, err := c.conn.Write(data); err != nil {
+		return nil, err
+	}
+
+	// Wait for response (synchronous for this request)
+	c.conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	reader := bufio.NewScanner(c.conn)
+	if reader.Scan() {
+		respData := reader.Bytes()
+		var resp TCPMessage
+		if err := json.Unmarshal(respData, &resp); err != nil {
+			return nil, err
+		}
+		return &resp, nil
+	}
+
+	if err := reader.Err(); err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf("no response from server")
 }
 
 // Close closes the TCP connection.

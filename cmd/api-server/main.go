@@ -154,11 +154,12 @@ func main() {
 	if tcpPort == "" {
 		tcpPort = "9090"
 	}
-	tcpServer := tcp.NewProgressSyncServer(tcpPort)
-	tcpServer.Persister = userService // Save TCP progress updates to DB
-	server.TCPServer = tcpServer
 
 	if enableTCPServer == "true" {
+		tcpServer := tcp.NewProgressSyncServer(tcpPort)
+		tcpServer.Persister = userService // Save TCP progress updates to DB
+		server.TCPServer = tcpServer
+
 		log.Println("Starting internal TCP server...")
 		go func() {
 			if err := tcpServer.Start(); err != nil {
@@ -180,10 +181,11 @@ func main() {
 	if udpPort == "" {
 		udpPort = "9091"
 	}
-	udpServer := udp.NewNotificationServer(udpPort)
-	server.UDPServer = udpServer
 
 	if enableUDPServer == "true" {
+		udpServer := udp.NewNotificationServer(udpPort)
+		server.UDPServer = udpServer
+
 		log.Println("Starting internal UDP server...")
 		go func() {
 			if err := udpServer.Start(); err != nil {
@@ -488,20 +490,32 @@ func main() {
 		syncRoutes.GET("/status", func(c *gin.Context) {
 			userID, _ := auth.GetUserIDFromContext(c)
 			var connectedUsers []string
-			var uptime time.Duration
+			var uptime string
+			var count int
 
+			// Try local server first
 			if server.TCPServer != nil {
 				connectedUsers = server.TCPServer.GetConnectedUsers()
-				uptime = server.TCPServer.GetUptime()
-			} else {
-				connectedUsers = []string{}
-				uptime = 0
+				uptime = server.TCPServer.GetUptime().String()
+				count = len(connectedUsers)
+			} else if server.TCPClient != nil {
+				// Standalone mode: Ask the remote server for status via TCP protocol
+				status, err := server.TCPClient.RequestStatus()
+				if err == nil {
+					count = status.ConnectedUsers
+					// The protocol status message often includes user list in Message field
+					// For now, we'll just report the count from the status message
+					connectedUsers = []string{"(View list in TCP monitor)"}
+					uptime = "Remote (See Standalone Logs)"
+				} else {
+					uptime = "Unreachable"
+				}
 			}
 
 			utils.SuccessResponse(c, "TCP sync server status", gin.H{
-				"server":          fmt.Sprintf("localhost:%s", tcpPort),
-				"uptime":          uptime.String(),
-				"connected_count": len(connectedUsers),
+				"server":          tcpPort,
+				"uptime":          uptime,
+				"connected_count": count,
 				"connected_users": connectedUsers,
 				"your_user_id":    userID,
 			})

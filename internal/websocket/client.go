@@ -37,16 +37,16 @@ func HandleWebSocket(hub *ChatHub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extract room before upgrade (http.Error won't work after upgrade)
+	room := r.URL.Query().Get("room")
+	if room == "" {
+		room = "general" // Default to general room
+	}
+
 	// Upgrade HTTP -> WebSocket
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WS: Upgrade failed: %v", err)
-		return
-	}
-
-	room := r.URL.Query().Get("room")
-	if room == "" {
-		http.Error(w, "Missing room query parameter", http.StatusBadRequest)
 		return
 	}
 
