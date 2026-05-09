@@ -288,25 +288,242 @@ func (h *Handler) DeleteList(c *gin.Context) {
 
 // SubscribeToList handles POST /reading-lists/:list_id/subscribe
 func (h *Handler) SubscribeToList(c *gin.Context) {
-	utils.BadRequestResponse(c, "Feature not yet implemented")
+	userID, err := auth.GetUserIDFromContext(c)
+	if err != nil {
+		utils.UnauthorizedResponse(c, "Unauthorized")
+		return
+	}
+
+	listID := c.Param("list_id")
+
+	// Get the list
+	list, err := h.service.GetListByID(listID)
+	if err != nil {
+		utils.NotFoundResponse(c, "Reading list not found")
+		return
+	}
+
+	// Cannot subscribe to your own list
+	if list.OwnerID == userID {
+		utils.BadRequestResponse(c, "You cannot subscribe to your own list")
+		return
+	}
+
+	// Check if already subscribed
+	for _, sub := range list.SharedWith {
+		if sub == userID {
+			utils.BadRequestResponse(c, "You are already subscribed to this list")
+			return
+		}
+	}
+
+	// Add user to shared_with (subscribers)
+	list.SharedWith = append(list.SharedWith, userID)
+	err = h.service.UpdateList(list.OwnerID, listID, list.Title, list.Description, list.IsPublic, list.MangaList, list.SharedWith)
+	if err != nil {
+		utils.InternalServerErrorResponse(c, "Failed to subscribe: "+err.Error())
+		return
+	}
+
+	// Log activity
+	username, _ := c.Get("username")
+	if h.activityService != nil && username != nil {
+		h.activityService.LogSharedListCreated(userID, username.(string), "Subscribed to: "+list.Title)
+	}
+
+	utils.SuccessResponse(c, "Subscribed to reading list successfully", gin.H{
+		"list_id": listID,
+		"title":   list.Title,
+	})
 }
 
 // UnsubscribeFromList handles DELETE /reading-lists/:list_id/subscribe
 func (h *Handler) UnsubscribeFromList(c *gin.Context) {
-	utils.BadRequestResponse(c, "Feature not yet implemented")
+	userID, err := auth.GetUserIDFromContext(c)
+	if err != nil {
+		utils.UnauthorizedResponse(c, "Unauthorized")
+		return
+	}
+
+	listID := c.Param("list_id")
+
+	// Get the list
+	list, err := h.service.GetListByID(listID)
+	if err != nil {
+		utils.NotFoundResponse(c, "Reading list not found")
+		return
+	}
+
+	// Find and remove user from shared_with
+	found := false
+	newSharedWith := make([]string, 0, len(list.SharedWith))
+	for _, sub := range list.SharedWith {
+		if sub == userID {
+			found = true
+		} else {
+			newSharedWith = append(newSharedWith, sub)
+		}
+	}
+
+	if !found {
+		utils.BadRequestResponse(c, "You are not subscribed to this list")
+		return
+	}
+
+	err = h.service.UpdateList(list.OwnerID, listID, list.Title, list.Description, list.IsPublic, list.MangaList, newSharedWith)
+	if err != nil {
+		utils.InternalServerErrorResponse(c, "Failed to unsubscribe: "+err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, "Unsubscribed from reading list successfully", gin.H{
+		"list_id": listID,
+		"title":   list.Title,
+	})
 }
 
 // GetSubscribedLists handles GET /reading-lists/subscribed
 func (h *Handler) GetSubscribedLists(c *gin.Context) {
-	utils.BadRequestResponse(c, "Feature not yet implemented")
+	userID, err := auth.GetUserIDFromContext(c)
+	if err != nil {
+		utils.UnauthorizedResponse(c, "Unauthorized")
+		return
+	}
+
+	// Get all public lists + lists shared with this user
+	allLists, _, err := h.service.GetPublicLists(1000, 0)
+	if err != nil {
+		utils.InternalServerErrorResponse(c, "Failed to fetch lists: "+err.Error())
+		return
+	}
+
+	// Filter to only lists where user is in shared_with (subscribed)
+	var subscribedLists []map[string]interface{}
+	for _, list := range allLists {
+		for _, sub := range list.SharedWith {
+			if sub == userID {
+				subscribedLists = append(subscribedLists, map[string]interface{}{
+					"id":          list.ID,
+					"owner_id":    list.OwnerID,
+					"owner_name":  list.OwnerName,
+					"title":       list.Title,
+					"description": list.Description,
+					"is_public":   list.IsPublic,
+					"manga_list":  list.MangaList,
+					"manga_ids":   list.MangaList,
+					"created_at":  list.CreatedAt,
+					"updated_at":  list.UpdatedAt,
+				})
+				break
+			}
+		}
+	}
+
+	utils.SuccessResponse(c, "Subscribed reading lists retrieved", gin.H{
+		"lists": subscribedLists,
+		"total": len(subscribedLists),
+	})
 }
 
 // AddMangaToList handles POST /reading-lists/:list_id/manga
 func (h *Handler) AddMangaToList(c *gin.Context) {
-	utils.BadRequestResponse(c, "Feature not yet implemented")
+	userID, err := auth.GetUserIDFromContext(c)
+	if err != nil {
+		utils.UnauthorizedResponse(c, "Unauthorized")
+		return
+	}
+
+	listID := c.Param("list_id")
+
+	var req struct {
+		MangaID string `json:"manga_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid request body: manga_id is required")
+		return
+	}
+
+	// Verify ownership
+	list, err := h.service.GetListByID(listID)
+	if err != nil {
+		utils.NotFoundResponse(c, "Reading list not found")
+		return
+	}
+	if list.OwnerID != userID {
+		utils.ForbiddenResponse(c, "You can only add manga to your own lists")
+		return
+	}
+
+	// Check if manga already exists in the list
+	for _, m := range list.MangaList {
+		if m == req.MangaID {
+			utils.BadRequestResponse(c, "Manga is already in this list")
+			return
+		}
+	}
+
+	// Add manga to list
+	list.MangaList = append(list.MangaList, req.MangaID)
+	err = h.service.UpdateList(userID, listID, list.Title, list.Description, list.IsPublic, list.MangaList, list.SharedWith)
+	if err != nil {
+		utils.InternalServerErrorResponse(c, "Failed to add manga: "+err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, "Manga added to reading list successfully", gin.H{
+		"list_id":    listID,
+		"manga_id":   req.MangaID,
+		"manga_list": list.MangaList,
+	})
 }
 
 // RemoveMangaFromList handles DELETE /reading-lists/:list_id/manga/:manga_id
 func (h *Handler) RemoveMangaFromList(c *gin.Context) {
-	utils.BadRequestResponse(c, "Feature not yet implemented")
+	userID, err := auth.GetUserIDFromContext(c)
+	if err != nil {
+		utils.UnauthorizedResponse(c, "Unauthorized")
+		return
+	}
+
+	listID := c.Param("list_id")
+	mangaID := c.Param("manga_id")
+
+	// Verify ownership
+	list, err := h.service.GetListByID(listID)
+	if err != nil {
+		utils.NotFoundResponse(c, "Reading list not found")
+		return
+	}
+	if list.OwnerID != userID {
+		utils.ForbiddenResponse(c, "You can only remove manga from your own lists")
+		return
+	}
+
+	// Find and remove the manga
+	found := false
+	newMangaList := make([]string, 0, len(list.MangaList))
+	for _, m := range list.MangaList {
+		if m == mangaID {
+			found = true
+		} else {
+			newMangaList = append(newMangaList, m)
+		}
+	}
+
+	if !found {
+		utils.NotFoundResponse(c, "Manga not found in this list")
+		return
+	}
+
+	err = h.service.UpdateList(userID, listID, list.Title, list.Description, list.IsPublic, newMangaList, list.SharedWith)
+	if err != nil {
+		utils.InternalServerErrorResponse(c, "Failed to remove manga: "+err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, "Manga removed from reading list successfully", gin.H{
+		"list_id":    listID,
+		"manga_id":   mangaID,
+		"manga_list": newMangaList,
+	})
 }

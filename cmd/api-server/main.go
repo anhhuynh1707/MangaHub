@@ -820,24 +820,26 @@ func main() {
 	// ============================================================
 	// SHARED READING LIST ROUTES
 	// ============================================================
-	listPublicRoutes := r.Group("/reading-lists")
+	readingListGroup := r.Group("/reading-lists")
 	{
-		listPublicRoutes.GET("/public", sharedListHandler.GetPublicLists)
-		listPublicRoutes.GET("/:list_id", sharedListHandler.GetList)
-	}
+		// Public routes (No Auth)
+		readingListGroup.GET("/public", sharedListHandler.GetPublicLists)
+		readingListGroup.GET("/:list_id", sharedListHandler.GetList)
 
-	listAuthRoutes := r.Group("/reading-lists")
-	listAuthRoutes.Use(auth.AuthMiddleware())
-	{
-		listAuthRoutes.POST("/create", sharedListHandler.CreateList)
-		listAuthRoutes.GET("/mine", sharedListHandler.GetMyLists)
-		listAuthRoutes.GET("/subscribed", sharedListHandler.GetSubscribedLists)
-		listAuthRoutes.PUT("/:list_id", sharedListHandler.UpdateList)
-		listAuthRoutes.DELETE("/:list_id", sharedListHandler.DeleteList)
-		listAuthRoutes.POST("/:list_id/subscribe", sharedListHandler.SubscribeToList)
-		listAuthRoutes.DELETE("/:list_id/subscribe", sharedListHandler.UnsubscribeFromList)
-		listAuthRoutes.POST("/:list_id/manga", sharedListHandler.AddMangaToList)
-		listAuthRoutes.DELETE("/:list_id/manga/:manga_id", sharedListHandler.RemoveMangaFromList)
+		// Authenticated routes
+		authListGroup := readingListGroup.Group("")
+		authListGroup.Use(auth.AuthMiddleware())
+		{
+			authListGroup.POST("/create", sharedListHandler.CreateList)
+			authListGroup.GET("/mine", sharedListHandler.GetMyLists)
+			authListGroup.GET("/subscribed", sharedListHandler.GetSubscribedLists)
+			authListGroup.PUT("/:list_id", sharedListHandler.UpdateList)
+			authListGroup.DELETE("/:list_id", sharedListHandler.DeleteList)
+			authListGroup.POST("/:list_id/subscribe", sharedListHandler.SubscribeToList)
+			authListGroup.DELETE("/:list_id/subscribe", sharedListHandler.UnsubscribeFromList)
+			authListGroup.POST("/:list_id/manga", sharedListHandler.AddMangaToList)
+			authListGroup.DELETE("/:list_id/manga/:manga_id", sharedListHandler.RemoveMangaFromList)
+		}
 	}
 
 	// ============================================================
