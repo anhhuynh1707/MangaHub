@@ -3,10 +3,12 @@ package user
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
 	"mangahub/internal/auth"
+	"mangahub/pkg/cache"
 	"mangahub/pkg/models"
 
 	"golang.org/x/crypto/bcrypt"
@@ -14,12 +16,31 @@ import (
 
 // Service handles user business logic.
 type Service struct {
-	repo *Repository
+	repo  *Repository
+	cache *cache.RedisCache
 }
 
 // NewService creates a new user service.
 func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
+}
+
+// SetCache sets the Redis cache instance for this service.
+func (s *Service) SetCache(c *cache.RedisCache) {
+	s.cache = c
+}
+
+// invalidateUserCaches removes cached data for a specific user.
+func (s *Service) invalidateUserCaches(userID string) {
+	if s.cache == nil {
+		return
+	}
+	if err := s.cache.Delete(cache.UserLibraryKey(userID)); err != nil {
+		log.Printf("cache: failed to invalidate user library %s: %v", userID, err)
+	}
+	if err := s.cache.Delete(cache.UserProfileKey(userID)); err != nil {
+		log.Printf("cache: failed to invalidate user profile %s: %v", userID, err)
+	}
 }
 
 // Register creates a new user account.
@@ -85,12 +106,25 @@ func (s *Service) Login(req *models.LoginRequest) (*models.LoginResponse, error)
 
 // GetProfile retrieves a user's profile by ID.
 func (s *Service) GetProfile(userID string) (*models.User, error) {
+	// Try cache first
+	if s.cache != nil {
+		var cached models.User
+		if s.cache.Get(cache.UserProfileKey(userID), &cached) {
+			return &cached, nil
+		}
+	}
+
 	user, err := s.repo.FindByID(userID)
 	if err != nil {
 		return nil, err
 	}
 	if user == nil {
 		return nil, errors.New("user not found")
+	}
+
+	// Populate cache
+	if s.cache != nil {
+		_ = s.cache.Set(cache.UserProfileKey(userID), user, cache.UserProfileTTL)
 	}
 	return user, nil
 }
@@ -125,11 +159,22 @@ func (s *Service) AddToLibrary(userID string, req *models.AddToLibraryRequest) (
 		return nil, err
 	}
 
+	// Invalidate user library cache
+	s.invalidateUserCaches(userID)
+
 	return progress, nil
 }
 
 // GetLibrary returns the user's library as categorized reading lists.
 func (s *Service) GetLibrary(userID string) (*models.UserData, error) {
+	// Try cache first
+	if s.cache != nil {
+		var cached models.UserData
+		if s.cache.Get(cache.UserLibraryKey(userID), &cached) {
+			return &cached, nil
+		}
+	}
+
 	user, err := s.repo.FindByID(userID)
 	if err != nil {
 		return nil, err
@@ -143,11 +188,18 @@ func (s *Service) GetLibrary(userID string) (*models.UserData, error) {
 		return nil, err
 	}
 
-	return &models.UserData{
+	userData := &models.UserData{
 		UserID:       userID,
 		Username:     user.Username,
 		ReadingLists: *lists,
-	}, nil
+	}
+
+	// Populate cache
+	if s.cache != nil {
+		_ = s.cache.Set(cache.UserLibraryKey(userID), userData, cache.UserLibraryTTL)
+	}
+
+	return userData, nil
 }
 
 // UpdateProgress updates reading progress for a manga.
@@ -177,12 +229,20 @@ func (s *Service) UpdateProgress(userID string, req *models.UpdateProgressReques
 		return nil, err
 	}
 
+	// Invalidate user library cache
+	s.invalidateUserCaches(userID)
+
 	return s.repo.GetLibraryEntry(userID, req.MangaID)
 }
 
 // RemoveFromLibrary removes a manga from the user's library.
 func (s *Service) RemoveFromLibrary(userID, mangaID string) error {
-	return s.repo.RemoveFromLibrary(userID, mangaID)
+	if err := s.repo.RemoveFromLibrary(userID, mangaID); err != nil {
+		return err
+	}
+	// Invalidate user library cache
+	s.invalidateUserCaches(userID)
+	return nil
 }
 
 // ChangePassword validates the old password and updates to a new one.
@@ -215,4 +275,5 @@ func generateUserID(username string) string {
 	id = strings.ReplaceAll(id, " ", "-")
 	return fmt.Sprintf("user-%s", id)
 }
+
 

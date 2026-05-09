@@ -1,4 +1,20 @@
 services:
+  # --- Redis Cache ---
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- MangaHub API Server ---
   mangahub-api:
     build: .
     command: api-server
@@ -16,12 +32,21 @@ services:
       - ENABLE_TCP_SERVER=false
       - ENABLE_UDP_SERVER=false
       - ENABLE_GRPC_SERVER=false
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
     restart: unless-stopped
     depends_on:
-      - mangahub-tcp
-      - mangahub-udp
-      - mangahub-grpc
+      redis:
+        condition: service_healthy
+      mangahub-tcp:
+        condition: service_started
+      mangahub-udp:
+        condition: service_started
+      mangahub-grpc:
+        condition: service_started
 
+  # --- TCP Progress Sync Server ---
   mangahub-tcp:
     build: .
     command: tcp-server
@@ -34,6 +59,7 @@ services:
       - DB_PATH=/app/data/mangahub.db
     restart: unless-stopped
 
+  # --- UDP Notification Server ---
   mangahub-udp:
     build: .
     command: udp-server
@@ -46,6 +72,7 @@ services:
       - DB_PATH=/app/data/mangahub.db
     restart: unless-stopped
 
+  # --- gRPC Internal Service ---
   mangahub-grpc:
     build: .
     command: grpc-server
@@ -60,4 +87,6 @@ services:
 
 volumes:
   mangahub-data:
+    driver: local
+  redis-data:
     driver: local

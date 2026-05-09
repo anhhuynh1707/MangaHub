@@ -5,26 +5,29 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"mangahub/data"
+	"mangahub/internal/activity"
 	"mangahub/internal/auth"
+	"mangahub/internal/friend"
 	grpcServer "mangahub/internal/grpc"
 	mangaPkg "mangahub/internal/manga"
+	"mangahub/internal/review"
+	"mangahub/internal/sharedlist"
 	"mangahub/internal/tcp"
 	"mangahub/internal/udp"
 	userPkg "mangahub/internal/user"
 	wsPkg "mangahub/internal/websocket"
+	"mangahub/pkg/cache"
 	"mangahub/pkg/database"
 	"mangahub/pkg/models"
 	"mangahub/pkg/utils"
-	"mangahub/internal/review"
-	"mangahub/internal/friend"
-	"mangahub/internal/sharedlist"
-	"mangahub/internal/activity"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -69,6 +72,19 @@ func main() {
 	}
 	defer db.Close()
 
+	// --- Redis Cache ---
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	redisDB := 0
+	if v := os.Getenv("REDIS_DB"); v != "" {
+		redisDB, _ = strconv.Atoi(v)
+	}
+	redisCache := cache.New(redisAddr, redisPassword, redisDB)
+	defer redisCache.Close()
+
 	// --- Repositories ---
 	userRepo := userPkg.NewRepository(db)
 	mangaRepo := mangaPkg.NewRepository(db)
@@ -80,15 +96,20 @@ func main() {
 	// --- Social Feature Services ---
 	reviewRepo := review.NewRepository(db)
 	reviewService := review.NewService(reviewRepo)
-	
+
 	friendRepo := friend.NewRepository(db)
 	friendService := friend.NewService(friendRepo)
-	
+
 	sharedListRepo := sharedlist.NewRepository(db)
 	sharedListService := sharedlist.NewService(sharedListRepo)
-	
+
 	activityRepo := activity.NewRepository(db)
 	activityService := activity.NewService(activityRepo)
+
+	// --- Inject Redis cache into services ---
+	mangaService.SetCache(redisCache)
+	userService.SetCache(redisCache)
+	activityService.SetCache(redisCache)
 
 	// --- MangaDex Client ---
 	mangaDexClient := mangaPkg.NewMangaDexClient()
@@ -203,14 +224,192 @@ func main() {
 	// --- Routes ---
 	r := server.Router
 
-	// Health check
-	r.GET("/health", func(c *gin.Context) {
-		count, _ := mangaService.GetCount()
-		utils.SuccessResponse(c, "MangaHub API is running", gin.H{
+	// ============================================================
+	// HEALTH CHECK ENDPOINTS — All Services
+	// ============================================================
+
+	// Helper: check database health
+	checkDatabase := func() gin.H {
+		start := time.Now()
+		err := db.Ping()
+		latency := time.Since(start)
+		if err != nil {
+			return gin.H{
+				"status":  "unhealthy",
+				"error":   err.Error(),
+				"latency": latency.String(),
+			}
+		}
+		// Get table counts
+		var mangaCount, userCount int
+		db.QueryRow("SELECT COUNT(*) FROM manga").Scan(&mangaCount)
+		db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
+		return gin.H{
 			"status":      "healthy",
+			"latency":     latency.String(),
+			"manga_count": mangaCount,
+			"user_count":  userCount,
+			"driver":      "sqlite3",
+		}
+	}
+
+	// Helper: check Redis health
+	checkRedis := func() gin.H {
+		if !redisCache.IsAvailable() {
+			return gin.H{"status": "disabled"}
+		}
+		return redisCache.Stats()
+	}
+
+	// Helper: check TCP server health
+	checkTCP := func() gin.H {
+		if server.TCPServer == nil {
+			return gin.H{"status": "disabled", "mode": "external"}
+		}
+		connectedUsers := server.TCPServer.GetConnectedUsers()
+		return gin.H{
+			"status":          "healthy",
+			"mode":            "internal",
+			"port":            tcpPort,
+			"uptime":          server.TCPServer.GetUptime().String(),
+			"connected_users": len(connectedUsers),
+			"users":           connectedUsers,
+			"strategy":        server.TCPServer.ConflictResolver.GetStrategy(),
+		}
+	}
+
+	// Helper: check UDP server health
+	checkUDP := func() gin.H {
+		if server.UDPServer == nil {
+			return gin.H{"status": "disabled", "mode": "external"}
+		}
+		return gin.H{
+			"status":       "healthy",
+			"mode":         "internal",
+			"port":         udpPort,
+			"client_count": server.UDPServer.GetClientCount(),
+			"clients":      server.UDPServer.GetClients(),
+		}
+	}
+
+	// Helper: check WebSocket hub health
+	checkWebSocket := func() gin.H {
+		generalClients := chatHub.GetClientCount("general")
+		onlineUsers := chatHub.GetOnlineUsers("general")
+		return gin.H{
+			"status":          "healthy",
+			"general_clients": generalClients,
+			"online_users":    onlineUsers,
+		}
+	}
+
+	// Helper: check gRPC server health
+	checkGRPC := func() gin.H {
+		if enableGRPCServer != "true" {
+			return gin.H{"status": "disabled", "mode": "external"}
+		}
+
+		// Attempt a TCP dial to the gRPC port as a lightweight liveness probe
+		start := time.Now()
+		conn, err := net.DialTimeout("tcp", "localhost:"+grpcPort, 2*time.Second)
+		latency := time.Since(start)
+		if err != nil {
+			return gin.H{
+				"status":  "unhealthy",
+				"port":    grpcPort,
+				"error":   err.Error(),
+				"latency": latency.String(),
+			}
+		}
+		conn.Close()
+		return gin.H{
+			"status":  "healthy",
+			"mode":    "internal",
+			"port":    grpcPort,
+			"latency": latency.String(),
+		}
+	}
+
+	// GET /health — Comprehensive health check for all services
+	r.GET("/health", func(c *gin.Context) {
+		dbHealth := checkDatabase()
+		redisHealth := checkRedis()
+		tcpHealth := checkTCP()
+		udpHealth := checkUDP()
+		wsHealth := checkWebSocket()
+		grpcHealth := checkGRPC()
+
+		// Determine overall status
+		overallStatus := "healthy"
+		if dbHealth["status"] == "unhealthy" {
+			overallStatus = "degraded"
+		}
+
+		count, _ := mangaService.GetCount()
+
+		utils.SuccessResponse(c, "MangaHub API is running", gin.H{
+			"status":      overallStatus,
 			"manga_count": count,
+			"services": gin.H{
+				"api":       gin.H{"status": "healthy", "port": port},
+				"database":  dbHealth,
+				"cache":     redisHealth,
+				"tcp":       tcpHealth,
+				"udp":       udpHealth,
+				"websocket": wsHealth,
+				"grpc":      grpcHealth,
+			},
 		})
 	})
+
+	// GET /health/db — Database health only
+	r.GET("/health/db", func(c *gin.Context) {
+		utils.SuccessResponse(c, "Database health", checkDatabase())
+	})
+
+	// GET /health/cache — Redis cache health only
+	r.GET("/health/cache", func(c *gin.Context) {
+		utils.SuccessResponse(c, "Cache health", checkRedis())
+	})
+
+	// GET /health/tcp — TCP Progress Sync Server health only
+	r.GET("/health/tcp", func(c *gin.Context) {
+		utils.SuccessResponse(c, "TCP server health", checkTCP())
+	})
+
+	// GET /health/udp — UDP Notification Server health only
+	r.GET("/health/udp", func(c *gin.Context) {
+		utils.SuccessResponse(c, "UDP server health", checkUDP())
+	})
+
+	// GET /health/ws — WebSocket Chat Hub health only
+	r.GET("/health/ws", func(c *gin.Context) {
+		utils.SuccessResponse(c, "WebSocket hub health", checkWebSocket())
+	})
+
+	// GET /health/grpc — gRPC server health only
+	r.GET("/health/grpc", func(c *gin.Context) {
+		utils.SuccessResponse(c, "gRPC server health", checkGRPC())
+	})
+
+	// Cache management endpoints (authenticated)
+	cacheRoutes := r.Group("/cache")
+	cacheRoutes.Use(auth.AuthMiddleware())
+	{
+		// GET /cache/stats — View Redis cache statistics
+		cacheRoutes.GET("/stats", func(c *gin.Context) {
+			utils.SuccessResponse(c, "Cache statistics", redisCache.Stats())
+		})
+
+		// DELETE /cache/flush — Flush all cached data
+		cacheRoutes.DELETE("/flush", func(c *gin.Context) {
+			if err := redisCache.Flush(); err != nil {
+				utils.InternalServerErrorResponse(c, "Failed to flush cache: "+err.Error())
+				return
+			}
+			utils.SuccessResponse(c, "Cache flushed successfully", nil)
+		})
+	}
 
 	// Auth routes (public)
 	r.POST("/auth/register", userHandler.Register)
@@ -682,6 +881,8 @@ func main() {
 	log.Printf("👥 Endpoints: POST /friends/add, GET /users/friends, POST /friends/:friend_id/accept")
 	log.Printf("📚 Endpoints: POST /reading-lists/create, GET /reading-lists/public, POST /reading-lists/:list_id/subscribe")
 	log.Printf("📺 Endpoints: GET /feed/activities, GET /feed/timeline, GET /users/:user_id/activities")
+	log.Printf("🔴 Endpoints: GET /cache/stats, DELETE /cache/flush (Redis cache)")
+	log.Printf("🏥 Health: GET /health, /health/db, /health/cache, /health/tcp, /health/udp, /health/ws, /health/grpc")
 
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
