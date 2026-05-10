@@ -48,9 +48,6 @@ docker-compose.override.yml
 profiles/
 config.json
 
-# --- Documentation ---
-*.md
-
 # --- Build Binaries ---
 *.exe
 bin/

@@ -65,16 +65,19 @@ func handleChat(args []string) {
 
 // chatJoin connects to the WebSocket chat server in interactive mode.
 func chatJoin(args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: mangahub chat join <room>")
+	room := parseFlag(args, "manga-id")
+	if room == "" {
+		room = getPositionalArg(args)
+	}
+
+	if room == "" {
+		fmt.Println("Usage: mangahub chat join <room> OR --manga-id <id>")
 		fmt.Println("Example: mangahub chat join general")
-		fmt.Println("         mangahub chat join one-piece")
+		fmt.Println("         mangahub chat join --manga-id one-piece")
 		return
 	}
 
 	cfg := requireAuth()
-
-	room := args[0]
 
 	// Build WebSocket URL with token auth
 	wsURL := strings.Replace(cfg.ServerURL, "http://", "ws://", 1)
@@ -257,17 +260,34 @@ func formatRoomName(room string) string {
 
 // chatSend sends a single message without entering interactive mode.
 func chatSend(args []string) {
-	if len(args) < 2 {
-		fmt.Println("Usage: mangahub chat send <room> \"your message here\"")
+	room := parseFlag(args, "manga-id")
+	var messageParts []string
+	positionalCount := 0
+
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--manga-id" {
+			i++ // skip value
+			continue
+		}
+		
+		if !strings.HasPrefix(args[i], "-") {
+			positionalCount++
+			if room == "" && positionalCount == 1 {
+				room = args[i]
+				continue
+			}
+			messageParts = append(messageParts, args[i])
+		}
+	}
+
+	if room == "" || len(messageParts) == 0 {
+		fmt.Println("Usage: mangahub chat send <room> \"message\" OR --manga-id <id> \"message\"")
 		fmt.Println("Example: mangahub chat send general \"Hello everyone!\"")
-		fmt.Println("         mangahub chat send one-piece \"New chapter is fire!\"")
+		fmt.Println("         mangahub chat send --manga-id one-piece \"New chapter is fire!\"")
 		return
 	}
 
 	cfg := requireAuth()
-
-	room := args[0]
-	args = args[1:] // remaining args are the message
 
 	wsURL := strings.Replace(cfg.ServerURL, "http://", "ws://", 1)
 	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
@@ -300,7 +320,7 @@ func chatSend(args []string) {
 	}()
 
 	// Send the message
-	message := strings.Join(args, " ")
+	message := strings.Join(messageParts, " ")
 	
 	conn.WriteJSON(wsChatMessage{
 		Type:    "message",
@@ -317,16 +337,19 @@ func chatSend(args []string) {
 
 // chatHistory fetches recent chat history via the HTTP API.
 func chatHistory(args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: mangahub chat history <room> [--limit <n>]")
+	room := parseFlag(args, "manga-id")
+	if room == "" {
+		room = getPositionalArg(args)
+	}
+
+	if room == "" {
+		fmt.Println("Usage: mangahub chat history <room> OR --manga-id <id> [--limit <n>]")
 		fmt.Println("Example: mangahub chat history general")
-		fmt.Println("         mangahub chat history one-piece --limit 30")
+		fmt.Println("         mangahub chat history --manga-id one-piece --limit 30")
 		return
 	}
 
 	cfg := requireAuth()
-
-	room := args[0]
 
 	limit := parseFlag(args[1:], "limit")
 	if limit == "" {
