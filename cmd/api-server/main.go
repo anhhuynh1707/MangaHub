@@ -120,7 +120,7 @@ func main() {
 	// --- Handlers ---
 	userHandler := userPkg.NewHandler(userService)
 	mangaHandler := mangaPkg.NewHandler(mangaService)
-	
+
 	// --- Social Feature Handlers ---
 	reviewHandler := review.NewHandler(reviewService, activityService, mangaService)
 	friendHandler := friend.NewHandler(friendService, activityService)
@@ -549,7 +549,7 @@ func main() {
 			}
 
 			utils.SuccessResponse(c, "Current conflict resolution strategy", gin.H{
-				"strategy":           strategy,
+				"strategy":             strategy,
 				"available_strategies": []string{"last_write_wins", "merge", "user_choice"},
 			})
 		})
@@ -996,12 +996,6 @@ func main() {
 	// ============================================================
 	// ACTIVITY FEED ROUTES
 	// ============================================================
-	feedPublicRoutes := r.Group("/feed")
-	{
-		feedPublicRoutes.GET("/filters", activityHandler.GetActivityFilters)
-		feedPublicRoutes.GET("/trending", activityHandler.GetTrendingActivity)
-	}
-
 	feedAuthRoutes := r.Group("/feed")
 	feedAuthRoutes.Use(auth.AuthMiddleware())
 	{

@@ -170,28 +170,6 @@ func (h *Handler) GetActivityStats(c *gin.Context) {
 	utils.SuccessResponse(c, "Activity stats retrieved", stats)
 }
 
-// GetActivityFilters handles GET /feed/filters
-func (h *Handler) GetActivityFilters(c *gin.Context) {
-	filters := map[string][]string{
-		"types": {
-			"manga_started",
-			"manga_completed",
-			"review_posted",
-			"friend_added",
-			"shared_list_created",
-			"shared_list_updated",
-		},
-		"time_ranges": {
-			"today",
-			"this_week",
-			"this_month",
-			"all_time",
-		},
-	}
-
-	utils.SuccessResponse(c, "Activity filters retrieved", filters)
-}
-
 // SearchActivities handles GET /feed/search
 func (h *Handler) SearchActivities(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
@@ -308,31 +286,6 @@ func (h *Handler) ClearActivityFeed(c *gin.Context) {
 	utils.SuccessResponse(c, "Activity feed cleared", nil)
 }
 
-// GetTrendingActivity handles GET /feed/trending
-func (h *Handler) GetTrendingActivity(c *gin.Context) {
-	pageStr := c.DefaultQuery("page", "1")
-	limitStr := c.DefaultQuery("limit", "20")
-
-	page, _ := strconv.Atoi(pageStr)
-	limit, _ := strconv.Atoi(limitStr)
-
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 || limit > 100 {
-		limit = 20
-	}
-
-	// Get most active users or most reviewed manga
-	// This would be retrieved from aggregated statistics
-	trending := map[string]interface{}{
-		"most_reviewed_manga": []map[string]interface{}{},
-		"most_active_users":   []map[string]interface{}{},
-		"trending_lists":      []map[string]interface{}{},
-	}
-
-	utils.SuccessResponse(c, "Trending activities retrieved", trending)
-}
 
 // FollowActivityStream handles WebSocket connection for real-time activities (optional)
 func (h *Handler) FollowActivityStream(c *gin.Context) {
