@@ -45,42 +45,6 @@ func ImportMangaFromJSON(filePath string) ([]models.Manga, error) {
 	return mangaList, nil
 }
 
-// ExportUserDataToJSON writes a user's data (profile + reading lists) to a JSON file.
-func ExportUserDataToJSON(userData models.UserData, dirPath string) error {
-	if err := os.MkdirAll(dirPath, 0755); err != nil {
-		return fmt.Errorf("failed to create user data directory: %w", err)
-	}
-
-	filePath := filepath.Join(dirPath, userData.UserID+".json")
-
-	data, err := json.MarshalIndent(userData, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal user data: %w", err)
-	}
-
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write user JSON: %w", err)
-	}
-
-	log.Printf("✅ Exported user data for %s to %s", userData.Username, filePath)
-	return nil
-}
-
-// ImportUserDataFromJSON reads a user's data from a JSON file.
-func ImportUserDataFromJSON(filePath string) (*models.UserData, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read user JSON: %w", err)
-	}
-
-	var userData models.UserData
-	if err := json.Unmarshal(data, &userData); err != nil {
-		return nil, fmt.Errorf("failed to parse user JSON: %w", err)
-	}
-
-	return &userData, nil
-}
-
 // ExportQuotesToJSON writes scraped quotes to a JSON file.
 func ExportQuotesToJSON(quotes []models.ScrapedQuote, filePath string) error {
 	if err := ensureDir(filePath); err != nil {

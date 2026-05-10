@@ -1,0 +1,13 @@
+{
+  "exported_at": "2026-05-10T16:03:50+07:00",
+  "progress": [
+    {
+      "user_id": "user-alice",
+      "manga_id": "one-piece",
+      "current_chapter": 1096,
+      "status": "reading",
+      "updated_at": "2026-05-09T16:01:57.135725544Z"
+    }
+  ],
+  "total": 1
+}

@@ -40,6 +40,10 @@ func main() {
 		handleSharedList(os.Args[2:])
 	case "feed":
 		handleFeed(os.Args[2:])
+	case "export":
+		handleExport(os.Args[2:])
+	case "import":
+		handleImport(os.Args[2:])
 	case "help", "--help", "-h":
 		printUsage()
 	case "version", "--version", "-v":
@@ -75,6 +79,8 @@ func printUsage() {
    friend      Friend system (add, accept, list, pending)
    sharedlist  Shared reading lists (create, mine, public)
    feed        Activity feed (view, mine)
+   export      Export data (library, progress, all)
+   import      Import data (library, progress, manga)
 
  EXAMPLES:
    mangahub auth register --username alice
@@ -92,6 +98,10 @@ func printUsage() {
    mangahub chat send one-piece "Hello One Piece fans!"
    mangahub grpc manga get --id one-piece
    mangahub grpc manga search --query "naruto"
+   mangahub export library --format json --output library.json
+   mangahub export progress --format csv --output progress.csv
+   mangahub export all --output mangahub-backup.tar.gz
+   mangahub import library --file library.json
 
  Use 'mangahub <command> --help' for more information about a command.`)
 }

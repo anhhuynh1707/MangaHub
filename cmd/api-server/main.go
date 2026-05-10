@@ -774,6 +774,143 @@ func main() {
 				"total":    len(mangaList),
 			})
 		})
+
+		// ============================================================
+		// DATA EXPORT ENDPOINTS — File downloads (JSON / CSV)
+		// ============================================================
+
+		// GET /data/export/library?format=json|csv — Download user library
+		dataRoutes.GET("/export/library", func(c *gin.Context) {
+			userID, _ := auth.GetUserIDFromContext(c)
+			format := c.DefaultQuery("format", "json")
+
+			userData, err := userService.GetLibrary(userID)
+			if err != nil {
+				utils.InternalServerErrorResponse(c, "Failed to get library")
+				return
+			}
+
+			// Flatten entries
+			var entries []models.UserProgress
+			entries = append(entries, userData.ReadingLists.Reading...)
+			entries = append(entries, userData.ReadingLists.Completed...)
+			entries = append(entries, userData.ReadingLists.PlanToRead...)
+
+			switch format {
+			case "csv":
+				// Save to file using csv_storage
+				filePath := "./data/library.csv"
+				if err := data.ExportProgressToCSV(entries, filePath); err != nil {
+					log.Printf("Warning: failed to save library CSV to disk: %v", err)
+				}
+				c.Header("Content-Disposition", "attachment; filename=library.csv")
+				c.Header("Content-Type", "text/csv")
+				c.Writer.WriteString("manga_id,current_chapter,status,updated_at\n")
+				for _, e := range entries {
+					c.Writer.WriteString(fmt.Sprintf("%s,%d,%s,%s\n",
+						e.MangaID, e.CurrentChapter, e.Status, e.UpdatedAt.Format(time.RFC3339)))
+				}
+			default:
+				c.Header("Content-Disposition", "attachment; filename=library.json")
+				c.JSON(200, gin.H{
+					"user_id":     userID,
+					"username":    userData.Username,
+					"exported_at": time.Now().Format(time.RFC3339),
+					"total":       len(entries),
+					"entries":     entries,
+				})
+			}
+		})
+
+		// GET /data/export/progress?format=json|csv — Download reading progress
+		dataRoutes.GET("/export/progress", func(c *gin.Context) {
+			userID, _ := auth.GetUserIDFromContext(c)
+			format := c.DefaultQuery("format", "csv")
+
+			userData, err := userService.GetLibrary(userID)
+			if err != nil {
+				utils.InternalServerErrorResponse(c, "Failed to get progress")
+				return
+			}
+
+			var entries []models.UserProgress
+			entries = append(entries, userData.ReadingLists.Reading...)
+			entries = append(entries, userData.ReadingLists.Completed...)
+			entries = append(entries, userData.ReadingLists.PlanToRead...)
+
+			switch format {
+			case "csv":
+				// Save to file using csv_storage
+				filePath := "./data/progress.csv"
+				if err := data.ExportProgressToCSV(entries, filePath); err != nil {
+					log.Printf("Warning: failed to save progress CSV to disk: %v", err)
+				}
+				c.Header("Content-Disposition", "attachment; filename=progress.csv")
+				c.Header("Content-Type", "text/csv")
+				c.Writer.WriteString("manga_id,current_chapter,status,updated_at\n")
+				for _, e := range entries {
+					c.Writer.WriteString(fmt.Sprintf("%s,%d,%s,%s\n",
+						e.MangaID, e.CurrentChapter, e.Status, e.UpdatedAt.Format(time.RFC3339)))
+				}
+			default:
+				c.Header("Content-Disposition", "attachment; filename=progress.json")
+				c.JSON(200, gin.H{
+					"exported_at": time.Now().Format(time.RFC3339),
+					"total":       len(entries),
+					"progress":    entries,
+				})
+			}
+		})
+
+		// GET /data/export/manga?format=json|csv — Download manga database
+		dataRoutes.GET("/export/manga", func(c *gin.Context) {
+			format := c.DefaultQuery("format", "json")
+			allManga, err := mangaService.GetAll()
+			if err != nil {
+				utils.InternalServerErrorResponse(c, "Failed to get manga")
+				return
+			}
+
+			switch format {
+			case "csv":
+				// Save to file using csv_storage
+				filePath := "./data/manga.csv"
+				if err := data.ExportMangaToCSV(allManga, filePath); err != nil {
+					log.Printf("Warning: failed to save manga CSV to disk: %v", err)
+				}
+				c.Header("Content-Disposition", "attachment; filename=manga.csv")
+				c.Header("Content-Type", "text/csv")
+				c.Writer.WriteString("id,title,author,genres,status,total_chapters,description\n")
+				for _, m := range allManga {
+					title := fmt.Sprintf("%q", m.Title)
+					author := fmt.Sprintf("%q", m.Author)
+					c.Writer.WriteString(fmt.Sprintf("%s,%s,%s,%s,%d\n",
+						m.ID, title, author, m.Status, m.TotalChapters))
+				}
+			default:
+				// Save to file using json_storage
+				if err := data.ExportMangaToJSON(allManga, "./data/manga_export.json"); err != nil {
+					log.Printf("Warning: failed to save manga JSON to disk: %v", err)
+				}
+				c.Header("Content-Disposition", "attachment; filename=manga.json")
+				c.JSON(200, allManga)
+			}
+		})
+
+		// GET /data/export/full — Download complete user data as JSON
+		dataRoutes.GET("/export/full", func(c *gin.Context) {
+			userID, _ := auth.GetUserIDFromContext(c)
+
+			library, _ := userService.GetLibrary(userID)
+
+			c.Header("Content-Disposition", "attachment; filename=mangahub-export.json")
+			c.JSON(200, gin.H{
+				"exported_at": time.Now().Format(time.RFC3339),
+				"version":     "1.0",
+				"user_id":     userID,
+				"library":     library,
+			})
+		})
 	}
 
 	// ============================================================
