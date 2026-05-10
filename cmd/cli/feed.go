@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 )
 
 func handleFeed(args []string) {
@@ -18,9 +19,13 @@ func handleFeed(args []string) {
 		feedMine(args[1:])
 	case "post":
 		feedPost(args[1:])
+	case "stats":
+		feedStats(args[1:])
+	case "timeline":
+		feedTimeline(args[1:])
 	default:
 		fmt.Printf("✗ Unknown feed command: '%s'\n", args[0])
-		fmt.Println("Available: view, mine, post")
+		fmt.Println("Available: view, mine, post, stats, timeline")
 	}
 }
 
@@ -142,4 +147,73 @@ func feedPost(args []string) {
 	}
 
 	fmt.Printf("✅ Successfully posted to your activity feed: \"%s\"\n", message)
+}
+
+func feedStats(args []string) {
+	resp, err := apiGet("/feed/stats")
+	if err != nil {
+		fmt.Printf("✗ Failed to retrieve feed stats: %v\n", err)
+		return
+	}
+
+	if !resp.Success && resp.Error != "" {
+		fmt.Printf("✗ %s\n", resp.Error)
+		return
+	}
+
+	var data map[string]int
+	if err := json.Unmarshal(resp.Data, &data); err != nil {
+		fmt.Printf("✗ Failed to parse response: %v\n", err)
+		return
+	}
+
+	fmt.Printf("📊 Activity Feed Statistics\n\n")
+	for k, v := range data {
+		fmt.Printf("- %s: %d\n", k, v)
+	}
+}
+
+func feedTimeline(args []string) {
+	resp, err := apiGet("/feed/timeline")
+	if err != nil {
+		fmt.Printf("✗ Failed to retrieve timeline: %v\n", err)
+		return
+	}
+
+	if !resp.Success && resp.Error != "" {
+		fmt.Printf("✗ %s\n", resp.Error)
+		return
+	}
+
+	var data map[string][]struct {
+		Message   string `json:"message"`
+		CreatedAt string `json:"created_at"`
+	}
+
+	if err := json.Unmarshal(resp.Data, &data); err != nil {
+		fmt.Printf("✗ Failed to parse response: %v\n", err)
+		return
+	}
+
+	fmt.Printf("📅 Social Timeline\n\n")
+
+	if len(data) == 0 {
+		fmt.Println("No timeline data available.")
+		return
+	}
+
+	var dates []string
+	for date := range data {
+		dates = append(dates, date)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(dates)))
+
+	for _, date := range dates {
+		acts := data[date]
+		fmt.Printf("=== %s ===\n", date)
+		for _, act := range acts {
+			fmt.Printf("[%s] %s\n", act.CreatedAt, act.Message)
+		}
+		fmt.Println()
+	}
 }
