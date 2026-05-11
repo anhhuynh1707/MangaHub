@@ -108,6 +108,19 @@ func (s *NotificationServer) handleMessage(data []byte, clientAddr *net.UDPAddr)
 		return
 	}
 
+	// Check if this is an API status request
+	if msgType, ok := broadcastMsg["type"].(string); ok && msgType == "api_status" {
+		statusResp := map[string]interface{}{
+			"type":         "status_reply",
+			"client_count": s.GetClientCount(),
+			"clients":      s.GetClients(),
+		}
+		data, _ := json.Marshal(statusResp)
+		data = append(data, '\n')
+		s.conn.WriteToUDP(data, clientAddr)
+		return
+	}
+
 	// Otherwise, handle as a regular client message
 	var msg Notification
 	if err := json.Unmarshal(data, &msg); err != nil {

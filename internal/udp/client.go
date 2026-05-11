@@ -68,6 +68,67 @@ func (c *NotificationClient) SendNotification(notif Notification) error {
 	return nil
 }
 
+// UDPStatus represents the status returned by the UDP server.
+type UDPStatus struct {
+	ClientCount int      `json:"client_count"`
+	Clients     []string `json:"clients"`
+}
+
+// RequestStatus requests the current status from the remote UDP server.
+func (c *NotificationClient) RequestStatus() (*UDPStatus, error) {
+	msg := map[string]interface{}{
+		"type": "api_status",
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal status request: %w", err)
+	}
+
+	// Add newline delimiter
+	data = append(data, '\n')
+
+	addr, err := net.ResolveUDPAddr("udp", c.ServerAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve server address: %w", err)
+	}
+
+	conn, err := net.DialUDP("udp", nil, addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create UDP connection: %w", err)
+	}
+	defer conn.Close()
+
+	// Send request
+	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if _, err := conn.Write(data); err != nil {
+		return nil, fmt.Errorf("failed to send status request: %w", err)
+	}
+
+	// Wait for response
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return nil, fmt.Errorf("no response from server: %w", err)
+	}
+
+	var resp struct {
+		Type        string   `json:"type"`
+		ClientCount int      `json:"client_count"`
+		Clients     []string `json:"clients"`
+	}
+
+	if err := json.Unmarshal(buf[:n], &resp); err != nil {
+		return nil, fmt.Errorf("invalid response from server: %w", err)
+	}
+
+	return &UDPStatus{
+		ClientCount: resp.ClientCount,
+		Clients:     resp.Clients,
+	}, nil
+}
+
 // Close is a no-op for UDP client (connectionless)
 func (c *NotificationClient) Close() error {
 	return nil

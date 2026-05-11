@@ -634,6 +634,16 @@ func main() {
 			if server.UDPServer != nil {
 				clientCount = server.UDPServer.GetClientCount()
 				clients = server.UDPServer.GetClients()
+			} else if server.UDPClient != nil {
+				status, err := server.UDPClient.RequestStatus()
+				if err == nil {
+					clientCount = status.ClientCount
+					clients = status.Clients
+				} else {
+					log.Printf("Failed to request UDP status: %v", err)
+					clientCount = 0
+					clients = []string{}
+				}
 			} else {
 				clientCount = 0
 				clients = []string{}
