@@ -6,6 +6,7 @@ MangaHub is a comprehensive manga tracking and reading platform featuring a robu
 1. [Architecture Overview](#architecture-overview)
 2. [Setup Instructions](#setup-instructions)
 3. [API Documentation](#api-documentation)
+4. [CLI Commands](#cli-commands)
 
 ---
 
