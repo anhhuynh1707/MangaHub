@@ -1326,7 +1326,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlci1hbGljZSIsInVzZXJuYW1lIjoiYWxpY2UiLCJpc3MiOiJtYW5nYWh1YiIsImV4cCI6MTc3ODQwMzEzNSwiaWF0IjoxNzc4MzE2NzM1fQ.6mGWOyEI4AjWIr2JXlHe9AjPpoJXVGSCpb_bKg49P9g",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlci1hbGljZSIsInVzZXJuYW1lIjoiYWxpY2UiLCJpc3MiOiJtYW5nYWh1YiIsImV4cCI6MTc3ODUxNTAwMSwiaWF0IjoxNzc4NDI4NjAxfQ.wp3e-lKgieeIXXkYc-92fnKz8hW2KmKun_qHqqieA6c",
                   "type": "string"
                 }
               ]
@@ -1375,15 +1375,15 @@
                 },
                 {
                   "key": "Date",
-                  "value": "Sat, 09 May 2026 09:00:41 GMT"
+                  "value": "Sun, 10 May 2026 15:56:50 GMT"
                 },
                 {
                   "key": "Content-Length",
-                  "value": "76"
+                  "value": "134"
                 }
               ],
               "cookie": [],
-              "body": "{\n    \"success\": true,\n    \"message\": \"Activity stats retrieved\",\n    \"data\": {\n        \"user_post\": 2\n    }\n}"
+              "body": "{\n    \"success\": true,\n    \"message\": \"Activity stats retrieved\",\n    \"data\": {\n        \"added_friend\": 2,\n        \"shared_list_created\": 1,\n        \"user_post\": 3,\n        \"wrote_review\": 1\n    }\n}"
             }
           ]
         },
@@ -3549,6 +3549,75 @@
               ],
               "cookie": [],
               "body": "{\n    \"success\": true,\n    \"message\": \"Notification sent to 1 clients\",\n    \"data\": {\n        \"message\": \"Chapter 1121 released!\",\n        \"sent_count\": 1,\n        \"type\": \"new_chapter\"\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET notify status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlci1hbGljZSIsInVzZXJuYW1lIjoiYWxpY2UiLCJpc3MiOiJtYW5nYWh1YiIsImV4cCI6MTc3ODU5NDgxOCwiaWF0IjoxNzc4NTA4NDE4fQ.OSoA5ZIkxtomINO75KpI4k2avT4xdbwEipEXwuNgnto",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/notify/status",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "notify",
+                "status"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "http://localhost:8080/notify/status",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "notify",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 11 May 2026 14:16:41 GMT"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "174"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"message\": \"UDP notification server status\",\n    \"data\": {\n        \"client_count\": 2,\n        \"clients\": [\n            \"172.18.0.1:60334\",\n            \"172.18.0.1:60828\"\n        ],\n        \"server\": \"localhost:mangahub-udp:9091\"\n    }\n}"
             }
           ]
         }
