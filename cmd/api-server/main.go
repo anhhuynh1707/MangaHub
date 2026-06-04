@@ -29,6 +29,10 @@ import (
 	"mangahub/pkg/utils"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "mangahub/docs"
 )
 
 // APIServer is the core server structure per spec requirements.
@@ -1040,6 +1044,9 @@ func main() {
 	log.Printf("📺 Endpoints: GET /feed/activities, GET /feed/timeline, GET /users/:user_id/activities")
 	log.Printf("🔴 Endpoints: GET /cache/stats, DELETE /cache/flush (Redis cache)")
 	log.Printf("🏥 Health: GET /health, /health/db, /health/cache, /health/tcp, /health/udp, /health/ws, /health/grpc")
+
+	// Swagger UI — http://localhost:8080/swagger/index.html
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

@@ -19,7 +19,17 @@ func NewHandler(service *Service) *Handler {
 }
 
 // Register handles user registration.
-// POST /auth/register
+//
+// @Summary      Register a new user
+// @Description  Create a new account with a unique username and password
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      models.RegisterRequest  true  "Registration payload"
+// @Success      201   {object}  utils.APIResponse       "User registered successfully"
+// @Failure      400   {object}  utils.APIResponse       "Invalid request body"
+// @Failure      409   {object}  utils.APIResponse       "Username already taken"
+// @Router       /auth/register [post]
 func (h *Handler) Register(c *gin.Context) {
 	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -41,7 +51,17 @@ func (h *Handler) Register(c *gin.Context) {
 }
 
 // Login handles user authentication.
-// POST /auth/login
+//
+// @Summary      Login
+// @Description  Authenticate with username and password, returns a JWT token
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      models.LoginRequest   true  "Login payload"
+// @Success      200   {object}  utils.APIResponse     "Login successful, token in data"
+// @Failure      400   {object}  utils.APIResponse     "Invalid request body"
+// @Failure      401   {object}  utils.APIResponse     "Wrong credentials"
+// @Router       /auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -59,7 +79,16 @@ func (h *Handler) Login(c *gin.Context) {
 }
 
 // GetProfile returns the authenticated user's profile.
-// GET /users/profile
+//
+// @Summary      Get current user profile
+// @Description  Returns the authenticated user's profile information
+// @Tags         users
+// @Produce      json
+// @Success      200  {object}  utils.APIResponse  "Profile data"
+// @Failure      401  {object}  utils.APIResponse  "Unauthorized"
+// @Failure      404  {object}  utils.APIResponse  "User not found"
+// @Security     BearerAuth
+// @Router       /users/profile [get]
 func (h *Handler) GetProfile(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -77,7 +106,19 @@ func (h *Handler) GetProfile(c *gin.Context) {
 }
 
 // AddToLibrary adds a manga to the user's library.
-// POST /users/library
+//
+// @Summary      Add manga to library
+// @Description  Add a manga entry to the authenticated user's reading library
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Param        body  body      models.AddToLibraryRequest  true  "Library entry"
+// @Success      201   {object}  utils.APIResponse            "Manga added"
+// @Failure      400   {object}  utils.APIResponse            "Invalid request"
+// @Failure      401   {object}  utils.APIResponse            "Unauthorized"
+// @Failure      409   {object}  utils.APIResponse            "Already in library"
+// @Security     BearerAuth
+// @Router       /users/library [post]
 func (h *Handler) AddToLibrary(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -105,7 +146,15 @@ func (h *Handler) AddToLibrary(c *gin.Context) {
 }
 
 // GetLibrary returns the user's library with categorized reading lists.
-// GET /users/library
+//
+// @Summary      Get user library
+// @Description  Returns the user's manga library categorised by status (reading / completed / plan_to_read)
+// @Tags         users
+// @Produce      json
+// @Success      200  {object}  utils.APIResponse  "Library data"
+// @Failure      401  {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /users/library [get]
 func (h *Handler) GetLibrary(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -123,7 +172,19 @@ func (h *Handler) GetLibrary(c *gin.Context) {
 }
 
 // UpdateProgress updates reading progress for a manga.
-// PUT /users/progress
+//
+// @Summary      Update reading progress
+// @Description  Update the current chapter and status for a manga in the user's library. Also triggers a TCP broadcast to connected sync clients.
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Param        body  body      models.UpdateProgressRequest  true  "Progress update"
+// @Success      200   {object}  utils.APIResponse              "Progress updated"
+// @Failure      400   {object}  utils.APIResponse              "Invalid request"
+// @Failure      401   {object}  utils.APIResponse              "Unauthorized"
+// @Failure      404   {object}  utils.APIResponse              "Manga not in library"
+// @Security     BearerAuth
+// @Router       /users/progress [put]
 func (h *Handler) UpdateProgress(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -155,7 +216,17 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 }
 
 // RemoveFromLibrary removes a manga from the user's library.
-// DELETE /users/library/:manga_id
+//
+// @Summary      Remove manga from library
+// @Description  Delete a manga entry from the authenticated user's library
+// @Tags         users
+// @Produce      json
+// @Param        manga_id  path      string  true  "Manga ID"
+// @Success      200       {object}  utils.APIResponse  "Removed successfully"
+// @Failure      401       {object}  utils.APIResponse  "Unauthorized"
+// @Failure      404       {object}  utils.APIResponse  "Not in library"
+// @Security     BearerAuth
+// @Router       /users/library/{manga_id} [delete]
 func (h *Handler) RemoveFromLibrary(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -178,7 +249,18 @@ func (h *Handler) RemoveFromLibrary(c *gin.Context) {
 }
 
 // ChangePassword handles password changes for authenticated users.
-// PUT /auth/change-password
+//
+// @Summary      Change password
+// @Description  Change the current user's password
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      models.ChangePasswordRequest  true  "Password change payload"
+// @Success      200   {object}  utils.APIResponse              "Password changed"
+// @Failure      400   {object}  utils.APIResponse              "Invalid request"
+// @Failure      401   {object}  utils.APIResponse              "Wrong current password"
+// @Security     BearerAuth
+// @Router       /auth/change-password [put]
 func (h *Handler) ChangePassword(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -205,7 +287,15 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 }
 
 // AuthStatus returns the current authentication status.
-// GET /auth/status
+//
+// @Summary      Check auth status
+// @Description  Verify whether the current JWT token is valid and return user info
+// @Tags         auth
+// @Produce      json
+// @Success      200  {object}  utils.APIResponse  "Authenticated"
+// @Failure      401  {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /auth/status [get]
 func (h *Handler) AuthStatus(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {

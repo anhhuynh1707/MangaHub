@@ -23,6 +23,19 @@ func NewHandler(service *Service, activityService *activity.Service, mangaServic
 }
 
 // CreateReview handles POST /manga/:id/reviews
+//
+// @Summary      Create a review
+// @Description  Submit a rating and review text for a manga
+// @Tags         reviews
+// @Accept       json
+// @Produce      json
+// @Param        id    path      string  true  "Manga ID"
+// @Param        body  body      object  true  "Review payload — {rating: int (1-10), text: string}"
+// @Success      200   {object}  utils.APIResponse  "Review created"
+// @Failure      400   {object}  utils.APIResponse  "Invalid rating or text"
+// @Failure      401   {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /manga/{id}/reviews [post]
 func (h *Handler) CreateReview(c *gin.Context) {
 	var req struct {
 		Rating int    `json:"rating" binding:"required"`
@@ -75,6 +88,17 @@ func (h *Handler) CreateReview(c *gin.Context) {
 }
 
 // GetReviews handles GET /manga/:id/reviews
+//
+// @Summary      Get manga reviews
+// @Description  List all reviews for a manga with pagination
+// @Tags         reviews
+// @Produce      json
+// @Param        id     path      string  true   "Manga ID"
+// @Param        page   query     int     false  "Page number (default 1)"
+// @Param        limit  query     int     false  "Results per page (default 10)"
+// @Success      200    {object}  utils.APIResponse  "Reviews list"
+// @Failure      500    {object}  utils.APIResponse  "Server error"
+// @Router       /manga/{id}/reviews [get]
 func (h *Handler) GetReviews(c *gin.Context) {
 	mangaID := c.Param("id")
 	pageStr := c.DefaultQuery("page", "1")
@@ -236,6 +260,17 @@ func (h *Handler) GetRatingStats(c *gin.Context) {
 }
 
 // GetMyReviews handles GET /users/reviews
+//
+// @Summary      Get my reviews
+// @Description  List all reviews written by the authenticated user
+// @Tags         reviews
+// @Produce      json
+// @Param        page   query     int  false  "Page number (default 1)"
+// @Param        limit  query     int  false  "Results per page (default 10)"
+// @Success      200    {object}  utils.APIResponse  "User's reviews"
+// @Failure      401    {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /users/reviews [get]
 func (h *Handler) GetMyReviews(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {

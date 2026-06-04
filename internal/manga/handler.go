@@ -19,7 +19,19 @@ func NewHandler(service *Service) *Handler {
 }
 
 // Search returns a list of manga with search and filters.
-// GET /manga
+//
+// @Summary      Search manga
+// @Description  Search and filter the manga catalogue. Supports keyword search, genre, status, and pagination.
+// @Tags         manga
+// @Produce      json
+// @Param        search  query     string  false  "Keyword search (title / author)"
+// @Param        genre   query     string  false  "Filter by genre (e.g. action, romance)"
+// @Param        status  query     string  false  "Filter by status (ongoing / completed)"
+// @Param        page    query     int     false  "Page number (default 1)"
+// @Param        limit   query     int     false  "Results per page (default 20)"
+// @Success      200     {object}  utils.APIResponse  "Manga list with pagination"
+// @Failure      400     {object}  utils.APIResponse  "Invalid query parameters"
+// @Router       /manga [get]
 func (h *Handler) Search(c *gin.Context) {
 	var query models.MangaSearchQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -42,7 +54,15 @@ func (h *Handler) Search(c *gin.Context) {
 }
 
 // GetByID returns a single manga by ID.
-// GET /manga/:id
+//
+// @Summary      Get manga by ID
+// @Description  Retrieve a single manga entry by its slug ID
+// @Tags         manga
+// @Produce      json
+// @Param        id   path      string  true  "Manga ID (slug)"
+// @Success      200  {object}  utils.APIResponse  "Manga detail"
+// @Failure      404  {object}  utils.APIResponse  "Manga not found"
+// @Router       /manga/{id} [get]
 func (h *Handler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -60,7 +80,19 @@ func (h *Handler) GetByID(c *gin.Context) {
 }
 
 // Create creates a new manga entry.
-// POST /manga
+//
+// @Summary      Create manga
+// @Description  Add a new manga to the catalogue (requires authentication)
+// @Tags         manga
+// @Accept       json
+// @Produce      json
+// @Param        body  body      models.Manga       true  "Manga data"
+// @Success      201   {object}  utils.APIResponse  "Manga created"
+// @Failure      400   {object}  utils.APIResponse  "Invalid request or bad input"
+// @Failure      401   {object}  utils.APIResponse  "Unauthorized"
+// @Failure      409   {object}  utils.APIResponse  "Manga ID already exists"
+// @Security     BearerAuth
+// @Router       /manga [post]
 func (h *Handler) Create(c *gin.Context) {
 	var manga models.Manga
 	if err := c.ShouldBindJSON(&manga); err != nil {
@@ -114,7 +146,20 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 // Update updates an existing manga.
-// PUT /manga/:id
+//
+// @Summary      Update manga
+// @Description  Update an existing manga entry by ID
+// @Tags         manga
+// @Accept       json
+// @Produce      json
+// @Param        id    path      string       true  "Manga ID (slug)"
+// @Param        body  body      models.Manga true  "Updated manga fields"
+// @Success      200   {object}  utils.APIResponse  "Manga updated"
+// @Failure      400   {object}  utils.APIResponse  "Invalid request"
+// @Failure      401   {object}  utils.APIResponse  "Unauthorized"
+// @Failure      404   {object}  utils.APIResponse  "Manga not found"
+// @Security     BearerAuth
+// @Router       /manga/{id} [put]
 func (h *Handler) Update(c *gin.Context) {
 	id := c.Param("id")
 
@@ -161,7 +206,17 @@ func (h *Handler) Update(c *gin.Context) {
 }
 
 // Delete removes a manga.
-// DELETE /manga/:id
+//
+// @Summary      Delete manga
+// @Description  Remove a manga entry from the catalogue
+// @Tags         manga
+// @Produce      json
+// @Param        id   path      string  true  "Manga ID (slug)"
+// @Success      200  {object}  utils.APIResponse  "Manga deleted"
+// @Failure      401  {object}  utils.APIResponse  "Unauthorized"
+// @Failure      404  {object}  utils.APIResponse  "Manga not found"
+// @Security     BearerAuth
+// @Router       /manga/{id} [delete]
 func (h *Handler) Delete(c *gin.Context) {
 	id := c.Param("id")
 

@@ -1,0 +1,620 @@
+definitions:
+  models.AddToLibraryRequest:
+    properties:
+      manga_id:
+        type: string
+      status:
+        enum:
+        - reading
+        - completed
+        - plan_to_read
+        - on_hold
+        - dropped
+        type: string
+    required:
+    - manga_id
+    type: object
+  models.ChangePasswordRequest:
+    properties:
+      new_password:
+        maxLength: 100
+        minLength: 6
+        type: string
+      old_password:
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  models.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  models.Manga:
+    properties:
+      author:
+        type: string
+      cover_url:
+        type: string
+      description:
+        type: string
+      genres:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      total_chapters:
+        type: integer
+    type: object
+  models.RegisterRequest:
+    properties:
+      password:
+        maxLength: 100
+        minLength: 6
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  models.UpdateProgressRequest:
+    properties:
+      current_chapter:
+        minimum: 0
+        type: integer
+      manga_id:
+        type: string
+      status:
+        enum:
+        - reading
+        - completed
+        - plan_to_read
+        - on_hold
+        - dropped
+        type: string
+    required:
+    - manga_id
+    type: object
+  utils.APIResponse:
+    properties:
+      data: {}
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+info:
+  contact: {}
+paths:
+  /auth/change-password:
+    put:
+      consumes:
+      - application/json
+      description: Change the current user's password
+      parameters:
+      - description: Password change payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password changed
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Wrong current password
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate with username and password, returns a JWT token
+      parameters:
+      - description: Login payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful, token in data
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Wrong credentials
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      summary: Login
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new account with a unique username and password
+      parameters:
+      - description: Registration payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User registered successfully
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "409":
+          description: Username already taken
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      summary: Register a new user
+      tags:
+      - auth
+  /auth/status:
+    get:
+      description: Verify whether the current JWT token is valid and return user info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authenticated
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Check auth status
+      tags:
+      - auth
+  /manga:
+    get:
+      description: Search and filter the manga catalogue. Supports keyword search,
+        genre, status, and pagination.
+      parameters:
+      - description: Keyword search (title / author)
+        in: query
+        name: search
+        type: string
+      - description: Filter by genre (e.g. action, romance)
+        in: query
+        name: genre
+        type: string
+      - description: Filter by status (ongoing / completed)
+        in: query
+        name: status
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manga list with pagination
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      summary: Search manga
+      tags:
+      - manga
+    post:
+      consumes:
+      - application/json
+      description: Add a new manga to the catalogue (requires authentication)
+      parameters:
+      - description: Manga data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.Manga'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Manga created
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid request or bad input
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "409":
+          description: Manga ID already exists
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Create manga
+      tags:
+      - manga
+  /manga/{id}:
+    delete:
+      description: Remove a manga entry from the catalogue
+      parameters:
+      - description: Manga ID (slug)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manga deleted
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: Manga not found
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete manga
+      tags:
+      - manga
+    get:
+      description: Retrieve a single manga entry by its slug ID
+      parameters:
+      - description: Manga ID (slug)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manga detail
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: Manga not found
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      summary: Get manga by ID
+      tags:
+      - manga
+    put:
+      consumes:
+      - application/json
+      description: Update an existing manga entry by ID
+      parameters:
+      - description: Manga ID (slug)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated manga fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.Manga'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manga updated
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: Manga not found
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Update manga
+      tags:
+      - manga
+  /manga/{id}/reviews:
+    get:
+      description: List all reviews for a manga with pagination
+      parameters:
+      - description: Manga ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 10)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reviews list
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      summary: Get manga reviews
+      tags:
+      - reviews
+    post:
+      consumes:
+      - application/json
+      description: Submit a rating and review text for a manga
+      parameters:
+      - description: Manga ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'Review payload — {rating: int (1-10), text: string}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Review created
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid rating or text
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a review
+      tags:
+      - reviews
+  /users/library:
+    get:
+      description: Returns the user's manga library categorised by status (reading
+        / completed / plan_to_read)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Library data
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user library
+      tags:
+      - users
+    post:
+      consumes:
+      - application/json
+      description: Add a manga entry to the authenticated user's reading library
+      parameters:
+      - description: Library entry
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddToLibraryRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Manga added
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "409":
+          description: Already in library
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Add manga to library
+      tags:
+      - users
+  /users/library/{manga_id}:
+    delete:
+      description: Delete a manga entry from the authenticated user's library
+      parameters:
+      - description: Manga ID
+        in: path
+        name: manga_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Removed successfully
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: Not in library
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove manga from library
+      tags:
+      - users
+  /users/profile:
+    get:
+      description: Returns the authenticated user's profile information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Profile data
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user profile
+      tags:
+      - users
+  /users/progress:
+    put:
+      consumes:
+      - application/json
+      description: Update the current chapter and status for a manga in the user's
+        library. Also triggers a TCP broadcast to connected sync clients.
+      parameters:
+      - description: Progress update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateProgressRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Progress updated
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: Manga not in library
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Update reading progress
+      tags:
+      - users
+  /users/reviews:
+    get:
+      description: List all reviews written by the authenticated user
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 10)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User's reviews
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my reviews
+      tags:
+      - reviews
+swagger: "2.0"
