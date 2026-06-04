@@ -3908,4 +3908,295 @@ PATH="$PATH:$HOME/go/bin" protoc \
 ```
 
 ---
+
+## 18. Advanced Search & Filtering
+
+### 18.1 SearchFilters Struct (spec-required)
+
+```go
+// pkg/models/models.go
+type SearchFilters struct {
+    Search    string   // keyword (title, author, description)
+    Genres    []string // multi-genre OR filter
+    Status    string   // "ongoing" | "completed"
+    YearRange [2]int   // mapped to chapter range (proxy — no year column)
+    MinRating float64  // minimum average review rating (0 = no filter)
+    SortBy    string   // "title" | "popularity" | "rating" | "recent"
+    Page      int
+    Limit     int
+}
+```
+
+### 18.2 Extended MangaSearchQuery
+
+```go
+type MangaSearchQuery struct {
+    Search    string   // existing — keyword search
+    Genre     string   // existing — single genre (legacy)
+    Genres    []string // NEW — multi-genre OR filter
+    Status    string   // existing
+    MinRating float64  // NEW — minimum avg review rating
+    SortBy    string   // NEW — sort order
+    Page      int
+    Limit     int
+}
+```
+
+### 18.3 Repository Search — SQL Generation
+
+```
+Search(query)
+  │
+  │ 1. Full-text WHERE clause:
+  │    "(LOWER(title) LIKE ? OR LOWER(author) LIKE ? OR LOWER(description) LIKE ?)"
+  │
+  │ 2. Multi-genre: for each genre in allGenres:
+  │    "LOWER(genres) LIKE ?"       ← AND-combined (each genre must match)
+  │
+  │ 3. Status: "status = ?"
+  │
+  │ 4. Rating join (when MinRating > 0 OR SortBy == "rating"):
+  │    SELECT m.*, COALESCE(AVG(r.rating), 0) AS avg_rating
+  │    FROM manga m
+  │    LEFT JOIN reviews r ON r.manga_id = m.id
+  │    WHERE ...
+  │    GROUP BY m.id
+  │    HAVING avg_rating >= ?
+  │
+  │ 5. ORDER BY switch:
+  │    "popularity" → ORDER BY total_chapters DESC
+  │    "rating"     → ORDER BY avg_rating DESC
+  │    "recent"     → ORDER BY rowid DESC
+  │    default      → ORDER BY title ASC
+  │
+  └─ LIMIT ? OFFSET ?
+```
+
+### 18.4 SearchByFilters — Adapter
+
+```
+SearchByFilters(f *SearchFilters)
+  │ converts SearchFilters → MangaSearchQuery
+  └─ calls Search(q)                    // reuses all existing logic
+```
+
+### 18.5 New Endpoint and CLI
+
+| Layer | What |
+|-------|------|
+| Handler | `manga.AdvancedSearch` — POST body → `SearchFilters` → service |
+| Service | `SearchByFilters(f)` → delegates to repo |
+| Route | `POST /manga/search` (public — no auth required) |
+| CLI | `mangahub manga advanced [query] --genres a,b --sort rating --min-rating 8` |
+
+---
+
+## 19. Recommendation System
+
+### 19.1 Spec Structs
+
+```go
+// pkg/models/models.go
+type UserProfile struct {
+    UserID         string
+    ReadManga      []string            // all manga IDs in library
+    CompletedManga []string            // status=completed only
+    Ratings        map[string]int      // manga_id -> review rating
+    GenreScores    map[string]float64  // genre -> accumulated weight
+}
+
+// internal/recommendation/engine.go
+type RecommendationEngine struct {
+    UserSimilarity  map[string]float64   // other_user_id -> Jaccard score
+    MangaSimilarity map[string][]string  // manga_id -> top-10 similar manga IDs
+    UserProfiles    map[string]UserProfile
+}
+```
+
+### 19.2 Algorithm Overview
+
+```
+Recommendation pipeline for userID:
+
+1. LoadProfiles(allProgress, allRatings, allManga)
+   │ Build UserProfile for every user:
+   │   ReadManga      ← from user_progress table
+   │   CompletedManga ← status = "completed"
+   │   Ratings        ← from reviews table
+   │   GenreScores    ← accumulated from genres of read manga
+   │                     (completed manga weighted 2x)
+
+2. ComputeUserSimilarity(targetUserID)
+   │ for each other user:
+   │   similarity = Jaccard(targetUser.ReadManga, otherUser.ReadManga)
+   │   Jaccard(A, B) = |A ∩ B| / |A ∪ B|
+
+3. ComputeMangaSimilarity()
+   │ co[mangaA][mangaB] = count of users who read BOTH
+   │ for each manga: sort co-read manga by count → top 10
+
+4. Recommend(targetUserID, limit)
+   │
+   │ ── Collaborative filtering ──────────────────────────
+   │ for each similar user (sorted by Jaccard score desc):
+   │   for each manga they completed → score += similarity × 2.0
+   │   for each manga they read     → score += similarity × 1.0
+   │   (skip if target already read it)
+   │
+   │ ── Content-based filtering ──────────────────────────
+   │ for each manga targetUser has completed:
+   │   for each similar manga (MangaSimilarity[manga]):
+   │     score += 1.5  (if not already read)
+   │
+   │ → sort by score desc → take top N
+   └─ return []ScoredManga{MangaID, Score, Reason}
+```
+
+### 19.3 Service Flow
+
+```
+GET /users/recommendations?limit=10
+  │
+  ├─ auth.AuthMiddleware() → userID
+  ▼
+recommendation.Service.GetRecommendations(userID, limit)
+  │
+  │ loadAllProgress()  → SELECT FROM user_progress
+  │ loadAllRatings()   → SELECT FROM reviews
+  │ loadAllManga()     → SELECT FROM manga
+  │
+  │ engine.LoadProfiles(...)
+  │ engine.ComputeUserSimilarity(userID)
+  │ engine.ComputeMangaSimilarity()
+  │ scored := engine.Recommend(userID, limit)
+  │
+  │ enrich each ScoredManga with full Manga data
+  │ build ProfileStats (total read, completed, top genres, similar user count)
+  ▼
+RecommendationResult {
+    UserID: "user-alice",
+    Recommendations: [{MangaID, Score, Reason, Manga: {...}}],
+    ProfileStats: {TotalRead, TotalCompleted, TopGenres, SimilarUsers}
+}
+```
+
+### 19.4 CLI Flow
+
+```
+mangahub manga recommend --limit 5
+  │
+  │ requireAuth() → load token from config
+  │ GET /users/recommendations?limit=5
+  ▼
+Display:
+  📚 Your Reading Profile: Read: 5 | Completed: 2 | Similar users: 1
+  🌟 Top 5 Recommendations:
+    1. Attack on Titan  score: 1.75  reason: similar to naruto
+    2. Demon Slayer     score: 1.20  reason: collaborative
+    ...
+```
+
+---
+
+## 20. CLI Updates
+
+### 20.1 New CLI Commands Summary
+
+| Command | Subcommand | HTTP / gRPC Call | New |
+|---------|-----------|-----------------|-----|
+| `manga` | `advanced` | `POST /manga/search` (SearchFilters body) | ✅ |
+| `manga` | `recommend` | `GET /users/recommendations` | ✅ |
+| `notify` | `send-ack` | `POST /notify/broadcast-ack` | ✅ |
+| `notify` | `ack-stats` | `GET /notify/ack-stats` | ✅ |
+| `grpc manga` | `stream` | gRPC `StreamSearch` (server streaming) | ✅ |
+| `grpc` | `watch` | gRPC `WatchMangaUpdates` (server streaming) | ✅ |
+
+### 20.2 manga advanced — Code Flow
+
+```
+mangahub manga advanced "naruto" --genres action --sort rating --min-rating 7
+  │
+  │ parseFlag → build SearchFilters body
+  │ apiRequest("POST", "/manga/search", body, token)
+  ▼
+Server: manga.AdvancedSearch → SearchByFilters → repository.Search
+  │ WHERE (title/author/desc LIKE ?) AND (genres LIKE ?)
+  │ LEFT JOIN reviews → HAVING avg_rating >= 7
+  │ ORDER BY avg_rating DESC
+  ▼
+CLI: printTable(results) + pagination hint
+```
+
+### 20.3 grpc manga stream — Code Flow
+
+```
+mangahub grpc manga stream --query "one" --limit 5
+  │
+  │ grpcClient.NewMangaClient(localhost:9092, token)
+  │ client.StreamSearch("one", "", 5, onResult)
+  │   └─ pb.MangaService.StreamSearch (server-side streaming RPC)
+  │
+  │ Server: for each manga in search results:
+  │   stream.Send(mangaToProto(&manga))   ← one message at a time
+  │
+  │ Client recv loop: for each message:
+  │   onResult(msg) → print formatted row
+  │   count++
+  │
+  └─ io.EOF → return nil → print "Stream complete"
+```
+
+### 20.4 grpc watch — Code Flow
+
+```
+mangahub grpc watch [--manga-id one-piece]
+  │
+  │ context.WithCancel → ctx
+  │ signal.Notify(interrupt) → go func { <-interrupt; cancel() }
+  │ client.WatchMangaUpdates(ctx, mangaID, userID, onEvent)
+  │   └─ pb.MangaService.WatchMangaUpdates (long-lived server stream)
+  │
+  │ Server: for { select {
+  │   case <-ctx.Done(): return nil
+  │   case event := <-eventHub.ch:
+  │     if filter matches: stream.Send(event)
+  │ }}
+  │
+  │ Client recv loop: for each event:
+  │   onEvent(event) → print formatted line
+  │   (blocks until Ctrl+C or server closes)
+  │
+  └─ ctx.Done() → cancel → io.EOF → clean exit
+
+When user runs: mangahub progress update --manga-id one-piece --chapter 1096
+  HTTP PUT /users/progress
+    → userService.UpdateProgress
+    → GRPCMangaServer.EventHub.PublishProgressUpdate("user-alice","one-piece",1096)
+    → EventHub.Publish(event) → fans out to all watch subscribers
+    → grpc watch Terminal prints: [10:30:15] 📖 PROGRESS manga=one-piece ch=1096
+```
+
+### 20.5 notify send-ack — Code Flow
+
+```
+mangahub notify send-ack --type new_chapter --manga-id one-piece --message "Ch 1121!"
+  │
+  │ apiRequest("POST", "/notify/broadcast-ack", body, token)
+  │
+  │ Server: BroadcastWithACK(notif)
+  │   1. ackTracker.track(msg, addrs) → notif_id
+  │   2. sendTo each client: notif + notification_id
+  │   3. ackTracker.finalise(id, pd, 3s) ← blocks 3 seconds
+  │      └─ drains ackCh for ACK messages from clients
+  │   4. build DeliveryRecord{AckedBy, Unacked, AckRate}
+  │
+  └─ CLI prints delivery report (sent, ACK'd, unacked, rate)
+
+If a client is running mangahub notify subscribe:
+  Client receives: {"type":"new_chapter","notification_id":"notif-xxx",...}
+  Client can ACK:  echo '{"type":"ack","notification_id":"notif-xxx"}' | nc -u localhost 9091
+  Server records ACK → AckRate = 100%
+```
+
+---
 **End of Documentation.**

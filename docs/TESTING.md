@@ -1615,5 +1615,219 @@ grpcurl -plaintext \
 
 ---
 
+## S20. Advanced Search & Filtering CLI
+
+### S20.1 Multi-Genre Filter
+```powershell
+# All manga with both action AND adventure genres
+mangahub manga advanced --genres action,adventure
+```
+
+### S20.2 Keyword + Sort by Rating
+```powershell
+# Search "one" sorted by average review rating (highest first)
+mangahub manga advanced one --sort rating
+```
+
+### S20.3 Minimum Rating Filter
+```powershell
+# Only manga with average review >= 8.0, sorted by popularity
+mangahub manga advanced --min-rating 8 --sort popularity
+```
+
+### S20.4 Status + Genre + Pagination
+```powershell
+# Ongoing romance manga, page 2
+mangahub manga advanced --genres romance --status ongoing --page 2 --limit 5
+```
+
+### S20.5 Equivalent HTTP Request (for reference)
+```powershell
+curl -s -X POST http://localhost:8080/manga/search `
+  -H "Authorization: Bearer $ALICE_TOKEN" `
+  -H "Content-Type: application/json" `
+  -d '{
+    "search": "one",
+    "genres": ["action", "adventure"],
+    "min_rating": 7.5,
+    "sort_by": "rating",
+    "page": 1,
+    "limit": 10
+  }'
+```
+
+---
+
+## S21. Recommendation System CLI
+
+### S21.1 Prerequisites — Add Manga to Library First
+```powershell
+# The engine needs reading history to generate recommendations
+mangahub library add --manga-id one-piece --status reading
+mangahub library add --manga-id naruto --status completed
+mangahub library add --manga-id bleach --status completed
+mangahub progress update --manga-id one-piece --chapter 1095
+```
+
+### S21.2 Get Recommendations (Default — Top 10)
+```powershell
+mangahub manga recommend
+```
+
+Expected output:
+```
+🤖 Generating personalised recommendations...
+   (based on your reading history and similar users)
+
+📚 Your Reading Profile:
+   Read: 3 manga | Completed: 2 | Similar users found: 1
+   Favourite genres: action, adventure, shounen
+
+🌟 Top 10 Recommendations for user-alice:
+
+   1. Attack on Titan              score: 1.75
+      Author: Hajime Isayama       Status: completed
+      Genres: action, drama, fantasy
+      Reason: similar to naruto
+      ID: attack-on-titan
+   ...
+```
+
+### S21.3 Limit Results
+```powershell
+mangahub manga recommend --limit 3
+```
+
+### S21.4 Equivalent HTTP Request
+```powershell
+curl -s http://localhost:8080/users/recommendations?limit=10 `
+  -H "Authorization: Bearer $ALICE_TOKEN"
+```
+
+---
+
+## S22. UDP ACK CLI
+
+### S22.1 Send Broadcast with Delivery Confirmation (Terminal 2)
+> First subscribe in Terminal 1: `mangahub notify subscribe`
+
+```powershell
+# Blocks for up to 3s waiting for ACKs, then prints delivery report
+mangahub notify send-ack `
+  --type new_chapter `
+  --manga-id one-piece `
+  --message "Chapter 1121 released!"
+```
+
+Expected output after 3 seconds:
+```
+📡 Sending broadcast with ACK tracking (waiting up to 3s)...
+   Type: new_chapter | Message: Chapter 1121 released!
+
+📊 Delivery Report — notif-1717481234567890000
+   Sent to:     1 client(s)
+   ACK'd:       0 client(s)
+   Unacked:     1 client(s)
+   ACK rate:    0%
+   ✗ No reply:  [127.0.0.1:54321]
+   ⚠  Some clients did not ACK within 3s (fire-and-forget still delivered)
+```
+
+### S22.2 Subscriber Sends ACK (Terminal 1)
+The `mangahub notify subscribe` command automatically ACKs tracked notifications.
+To manually ACK via netcat:
+```bash
+# Replace the notification_id with the one received
+echo '{"type":"ack","notification_id":"notif-1717481234567890000"}' | nc -u localhost 9091
+```
+
+### S22.3 View Delivery History
+```powershell
+mangahub notify ack-stats
+```
+
+Expected output:
+```
+📊 Delivery History (3 records):
+
+  Notification ID                    | Message                   | Sent | ACK'd | Rate | Timeout
+  notif-1717481234567890000          | Chapter 1121 released!    |  2   |  1    |  50% | Yes
+  notif-1717481200000000000          | Test notification         |  1   |  1    | 100% | No
+```
+
+---
+
+## S23. gRPC Streaming CLI
+
+### S23.1 StreamSearch — Results Streamed One by One
+
+```powershell
+# Results arrive individually rather than as a single response
+mangahub grpc manga stream --query "one" --limit 5
+```
+
+Expected output:
+```
+📡 Streaming search results for "one" (server-side streaming)...
+
+  [ 1] One Piece                        Eiichiro Oda         ongoing      518 ch | adventure, action, ...
+  [ 2] One Punch Man                    ONE                  ongoing       200 ch | action, comedy, ...
+  [ 3] Monster                          Naoki Urasawa        completed     162 ch | mystery, drama, ...
+  [ 4] Fullmetal Alchemist              Hiromu Arakawa       completed     116 ch | action, adventure, ...
+  [ 5] One-Punch Man                    Yusuke Murata        ongoing       195 ch | action, comedy, ...
+
+✓ Stream complete — received 5 results
+```
+
+### S23.2 WatchMangaUpdates — Live Event Stream (Terminal 1)
+
+```powershell
+# Blocks and streams live events — press Ctrl+C to stop
+mangahub grpc watch
+```
+
+Expected after connection:
+```
+📺 Watching ALL manga update events (press Ctrl+C to stop)...
+   Events stream live as users update progress or manga is changed.
+
+[10:30:01] ✓ Connected — Watching manga updates (filter: "")
+```
+
+### S23.3 Trigger Live Events (Terminal 2)
+
+```powershell
+# Update progress — Terminal 1 will instantly receive this
+mangahub progress update --manga-id one-piece --chapter 1096
+```
+
+Terminal 1 shows immediately:
+```
+[10:30:15] 📖 PROGRESS  manga=one-piece            ch=1096   user=user-alice
+```
+
+### S23.4 Watch a Specific Manga Only
+
+```powershell
+mangahub grpc watch --manga-id naruto
+```
+
+Only events for `naruto` will appear; all other manga updates are filtered out.
+
+### S23.5 gRPC Watch vs grpcurl (both work)
+
+```bash
+# CLI way (above)
+mangahub grpc watch --manga-id one-piece
+
+# grpcurl way (equivalent)
+grpcurl -plaintext \
+  -H "authorization: Bearer $TOKEN" \
+  -d '{"manga_id":"one-piece","user_id":"user-alice"}' \
+  localhost:9092 mangahub.MangaService/WatchMangaUpdates
+```
+
+---
+
 > **Note:** After resetting the database, all users must be re-registered.
 > Passwords for test users: alice -> alice123, bob -> bob123

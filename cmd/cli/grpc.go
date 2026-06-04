@@ -259,7 +259,8 @@ func grpcWatch(args []string) {
 	} else {
 		fmt.Println("📺 Watching ALL manga update events (press Ctrl+C to stop)...")
 	}
-	fmt.Println("   Events stream live as users update progress or manga is changed.\n")
+	fmt.Println("   Events stream live as users update progress or manga is changed.")
+	fmt.Println()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
