@@ -52,6 +52,12 @@ config.json
 *.exe
 bin/
 
+# macOS / Linux compiled binaries (no extension)
+api-server
+tcp-server
+udp-server
+grpc-server
+tcp-client
 mangahub
 TASKS.html
 
