@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// AckTimeout is how long BroadcastWithACK waits for client acknowledgements.
+const AckTimeout = 3 * time.Second
+
 // BroadcastNotification sends a notification to ALL registered clients.
 // This is fire-and-forget — no ACK is expected from clients.
 func (s *NotificationServer) BroadcastNotification(notif Notification) int {
@@ -63,4 +66,51 @@ func (s *NotificationServer) NotifySystem(message string) int {
 		Type:    "system",
 		Message: message,
 	})
+}
+
+// BroadcastWithACK sends a notification to all registered clients and waits up
+// to AckTimeout for each client to reply with {"type":"ack","notification_id":"..."}.
+// Returns a DeliveryRecord describing which clients acknowledged in time.
+func (s *NotificationServer) BroadcastWithACK(notif Notification) *DeliveryRecord {
+	if notif.Timestamp == 0 {
+		notif.Timestamp = time.Now().Unix()
+	}
+
+	// Snapshot the current client list
+	s.mu.RLock()
+	addrs := make([](*net.UDPAddr), len(s.Clients))
+	addrStrs := make([]string, len(s.Clients))
+	for i := range s.Clients {
+		addr := s.Clients[i]
+		addrs[i] = &addr
+		addrStrs[i] = addr.String()
+	}
+	s.mu.RUnlock()
+
+	if len(addrs) == 0 {
+		log.Printf("UDP ACK: No clients registered, skipping broadcast")
+		return &DeliveryRecord{
+			NotifID:  generateID(),
+			Message:  notif.Message,
+			SentAt:   time.Now(),
+			AckRate:  1.0,
+		}
+	}
+
+	// Register with the ACK tracker before sending
+	id, pd := s.ackTracker.track(notif.Message, addrStrs)
+	notif.NotificationID = id
+
+	// Send to all clients
+	for _, addr := range addrs {
+		s.sendTo(addr, notif)
+	}
+
+	log.Printf("UDP ACK: Sent notif %s to %d clients, waiting %s for ACKs...", id, len(addrs), AckTimeout)
+
+	// Wait for ACKs and build the final report
+	record := s.ackTracker.finalise(id, pd, AckTimeout)
+	log.Printf("UDP ACK: %s — %d/%d clients ACK'd (rate=%.0f%%)",
+		id, len(record.AckedBy), len(record.SentTo), record.AckRate*100)
+	return record
 }

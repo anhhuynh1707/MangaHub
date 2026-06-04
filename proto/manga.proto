@@ -5,13 +5,17 @@ option go_package = "mangahub/internal/grpc/pb";
 // MangaService provides gRPC access to the MangaHub manga database
 // and user progress tracking system.
 service MangaService {
-    // GetManga retrieves a single manga by its slug ID.
-    rpc GetManga(GetMangaRequest) returns (MangaResponse);
-    // SearchManga queries the database by title, genre, or both.
-    rpc SearchManga(SearchRequest) returns (SearchResponse);
-    // UpdateProgress updates a user's reading progress for a manga.
-    rpc UpdateProgress(ProgressRequest) returns (ProgressResponse);
+    // Unary RPCs
+    rpc GetManga(GetMangaRequest)         returns (MangaResponse);
+    rpc SearchManga(SearchRequest)        returns (SearchResponse);
+    rpc UpdateProgress(ProgressRequest)   returns (ProgressResponse);
+
+    // Server-side streaming RPCs
+    rpc StreamSearch(SearchRequest)             returns (stream MangaResponse);
+    rpc WatchMangaUpdates(WatchRequest)         returns (stream MangaEvent);
 }
+
+// ── Existing messages ──────────────────────────────────────────
 
 message GetMangaRequest {
     string manga_id = 1;
@@ -47,4 +51,23 @@ message ProgressRequest {
 message ProgressResponse {
     bool success = 1;
     string message = 2;
+}
+
+// ── New streaming messages ─────────────────────────────────────
+
+// WatchRequest subscribes to real-time manga events.
+// Leave manga_id empty to receive events for all manga.
+message WatchRequest {
+    string manga_id = 1;
+    string user_id  = 2;
+}
+
+// MangaEvent is a single real-time event pushed by WatchMangaUpdates.
+message MangaEvent {
+    string event_type = 1; // "connected","new_chapter","manga_updated","progress_updated"
+    string manga_id   = 2;
+    string user_id    = 3;
+    string message    = 4;
+    int64  timestamp  = 5;
+    int32  chapter    = 6;
 }

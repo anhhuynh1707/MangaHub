@@ -12,27 +12,35 @@ import (
 // NotificationServer is the UDP server for broadcasting manga notifications.
 // Spec-required struct: manages registered client addresses and sends fire-and-forget notifications.
 type NotificationServer struct {
-	Port    string
-	Clients []net.UDPAddr // Registered client addresses
-	mu      sync.RWMutex
-	conn    *net.UDPConn
+	Port       string
+	Clients    []net.UDPAddr // Registered client addresses
+	mu         sync.RWMutex
+	conn       *net.UDPConn
+	ackTracker *AckTracker
 }
 
 // Notification represents a UDP notification message.
 type Notification struct {
-	Type      string `json:"type"` // "new_chapter", "system", "manga_update", "register", "unregister", "register_ack", "test"
-	MangaID   string `json:"manga_id,omitempty"`
-	Title     string `json:"title,omitempty"`
-	Message   string `json:"message"`
-	Timestamp int64  `json:"timestamp,omitempty"`
+	Type           string `json:"type"` // "new_chapter","system","manga_update","register","unregister","register_ack","test","ack"
+	MangaID        string `json:"manga_id,omitempty"`
+	Title          string `json:"title,omitempty"`
+	Message        string `json:"message"`
+	Timestamp      int64  `json:"timestamp,omitempty"`
+	NotificationID string `json:"notification_id,omitempty"` // set for tracked broadcasts; echoed back in ACK
 }
 
 // NewNotificationServer creates a new UDP notification server.
 func NewNotificationServer(port string) *NotificationServer {
 	return &NotificationServer{
-		Port:    port,
-		Clients: make([]net.UDPAddr, 0),
+		Port:       port,
+		Clients:    make([]net.UDPAddr, 0),
+		ackTracker: newAckTracker(),
 	}
+}
+
+// GetAckTracker exposes the ACK tracker so the HTTP layer can read delivery history.
+func (s *NotificationServer) GetAckTracker() *AckTracker {
+	return s.ackTracker
 }
 
 // Start begins listening for UDP messages (registrations) and allows broadcasting.
@@ -151,6 +159,13 @@ func (s *NotificationServer) handleMessage(data []byte, clientAddr *net.UDPAddr)
 			Timestamp: time.Now().Unix(),
 		})
 		log.Printf("UDP: Client unregistered: %s (total: %d)", clientAddr, s.GetClientCount())
+
+	case "ack":
+		// Client is acknowledging a tracked notification.
+		if msg.NotificationID != "" {
+			s.ackTracker.RecordACK(msg.NotificationID, clientAddr.String())
+			log.Printf("UDP: ACK from %s for notif %s", clientAddr, msg.NotificationID)
+		}
 
 	case "test":
 		// Echo test — respond directly to sender

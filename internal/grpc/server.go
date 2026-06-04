@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 
 	"mangahub/internal/auth"
 	pb "mangahub/internal/grpc/pb"
@@ -25,6 +26,7 @@ type MangaServer struct {
 	pb.UnimplementedMangaServiceServer
 	mangaService *mangaPkg.Service
 	userService  *userPkg.Service
+	EventHub     *MangaEventHub
 }
 
 // NewMangaServer creates a new gRPC MangaServer.
@@ -32,6 +34,7 @@ func NewMangaServer(mangaService *mangaPkg.Service, userService *userPkg.Service
 	return &MangaServer{
 		mangaService: mangaService,
 		userService:  userService,
+		EventHub:     NewMangaEventHub(),
 	}
 }
 
@@ -114,6 +117,77 @@ func (s *MangaServer) UpdateProgress(ctx context.Context, req *pb.ProgressReques
 	}, nil
 }
 
+// StreamSearch streams search results one manga at a time.
+// The client receives each result as a separate message instead of waiting for the full list.
+func (s *MangaServer) StreamSearch(req *pb.SearchRequest, stream grpc.ServerStreamingServer[pb.MangaResponse]) error {
+	limit := int(req.Limit)
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	query := &models.MangaSearchQuery{
+		Search: req.Query,
+		Genre:  req.Genre,
+		Page:   1,
+		Limit:  limit,
+	}
+
+	mangaList, _, err := s.mangaService.Search(query)
+	if err != nil {
+		return status.Errorf(codes.Internal, "search failed: %v", err)
+	}
+
+	for i := range mangaList {
+		if err := stream.Send(mangaToProto(&mangaList[i])); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WatchMangaUpdates subscribes the caller to real-time manga events.
+// The stream stays open and pushes events (progress updates, manga changes) until the client disconnects.
+func (s *MangaServer) WatchMangaUpdates(req *pb.WatchRequest, stream grpc.ServerStreamingServer[pb.MangaEvent]) error {
+	ctx := stream.Context()
+
+	subID := fmt.Sprintf("watch-%d", time.Now().UnixNano())
+	ch := s.EventHub.Subscribe(subID)
+	defer s.EventHub.Unsubscribe(subID)
+
+	// Send an initial connected event so the client knows the stream is live
+	if err := stream.Send(&pb.MangaEvent{
+		EventType: "connected",
+		Message:   fmt.Sprintf("Watching manga updates (filter: %q)", req.MangaId),
+		Timestamp: time.Now().Unix(),
+	}); err != nil {
+		return err
+	}
+
+	log.Printf("gRPC Stream: WatchMangaUpdates started for user=%s manga=%q", req.UserId, req.MangaId)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("gRPC Stream: client %s disconnected", subID)
+			return nil
+		case event, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			// Filter: if the request specifies a manga_id, skip unrelated events
+			if req.MangaId != "" && event.MangaId != req.MangaId {
+				continue
+			}
+			if err := stream.Send(event); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 // mangaToProto converts a models.Manga to the protobuf MangaResponse.
 func mangaToProto(m *models.Manga) *pb.MangaResponse {
 	return &pb.MangaResponse{
@@ -157,20 +231,44 @@ func AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServe
 	return handler(ctx, req)
 }
 
-// StartGRPCServer starts the gRPC server on the given port.
-// It blocks until the server is stopped or an error occurs.
-func StartGRPCServer(port string, mangaService *mangaPkg.Service, userService *userPkg.Service) error {
+// StreamAuthInterceptor validates JWT on server-side streaming RPCs.
+func StreamAuthInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	md, ok := metadata.FromIncomingContext(ss.Context())
+	if !ok {
+		return status.Error(codes.Unauthenticated, "missing metadata")
+	}
+	authHeader, ok := md["authorization"]
+	if !ok || len(authHeader) == 0 {
+		return status.Error(codes.Unauthenticated, "missing authorization header")
+	}
+	tokenString := strings.TrimPrefix(authHeader[0], "Bearer ")
+	if _, err := auth.ValidateToken(tokenString); err != nil {
+		return status.Errorf(codes.Unauthenticated, "invalid token: %v", err)
+	}
+	return handler(srv, ss)
+}
+
+// ServeGRPC binds a port and starts serving with a pre-created MangaServer.
+// Use this when you need the server reference before blocking on Serve.
+func ServeGRPC(port string, mangaServer *MangaServer) error {
 	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		return fmt.Errorf("gRPC: failed to listen on :%s: %w", port, err)
 	}
 
-	grpcServer := grpc.NewServer(
+	srv := grpc.NewServer(
 		grpc.UnaryInterceptor(AuthInterceptor),
+		grpc.StreamInterceptor(StreamAuthInterceptor),
 	)
-	mangaServer := NewMangaServer(mangaService, userService)
-	pb.RegisterMangaServiceServer(grpcServer, mangaServer)
+	pb.RegisterMangaServiceServer(srv, mangaServer)
 
 	log.Printf("🔌 gRPC MangaService listening on :%s", port)
-	return grpcServer.Serve(lis)
+	return srv.Serve(lis)
+}
+
+// StartGRPCServer is a convenience wrapper for standalone mode.
+// It creates the server internally and blocks.
+func StartGRPCServer(port string, mangaService *mangaPkg.Service, userService *userPkg.Service) error {
+	mangaServer := NewMangaServer(mangaService, userService)
+	return ServeGRPC(port, mangaServer)
 }

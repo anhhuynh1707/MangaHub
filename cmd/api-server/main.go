@@ -37,14 +37,15 @@ import (
 
 // APIServer is the core server structure per spec requirements.
 type APIServer struct {
-	Router     *gin.Engine
-	Database   *sql.DB
-	JWTSecret  string
-	TCPServer  *tcp.ProgressSyncServer
-	TCPClient  *tcp.ProgressSyncClient
-	UDPServer  *udp.NotificationServer
-	UDPClient  *udp.NotificationClient
-	UseClients bool // true if using remote services
+	Router          *gin.Engine
+	Database        *sql.DB
+	JWTSecret       string
+	TCPServer       *tcp.ProgressSyncServer
+	TCPClient       *tcp.ProgressSyncClient
+	UDPServer       *udp.NotificationServer
+	UDPClient       *udp.NotificationClient
+	GRPCMangaServer *grpcServer.MangaServer // kept for EventHub access
+	UseClients      bool                    // true if using remote services
 }
 
 func main() {
@@ -218,8 +219,10 @@ func main() {
 
 	if enableGRPCServer == "true" {
 		log.Println("Starting internal gRPC server...")
+		gms := grpcServer.NewMangaServer(mangaService, userService)
+		server.GRPCMangaServer = gms
 		go func() {
-			if err := grpcServer.StartGRPCServer(grpcPort, mangaService, userService); err != nil {
+			if err := grpcServer.ServeGRPC(grpcPort, gms); err != nil {
 				log.Printf("gRPC server error: %v", err)
 			}
 		}()
@@ -474,13 +477,20 @@ func main() {
 						Timestamp: time.Now().Unix(),
 					}
 
-					// Use client if remote, otherwise use local server
+					// Broadcast via TCP
 					if server.TCPClient != nil {
 						if err := server.TCPClient.SendProgressUpdate(update); err != nil {
 							log.Printf("TCP client error: %v", err)
 						}
 					} else if server.TCPServer != nil {
 						server.TCPServer.SendProgressUpdate(update)
+					}
+
+					// Publish to gRPC event hubâ WatchMangaUpdates streams
+					if server.GRPCMangaServer != nil {
+						server.GRPCMangaServer.EventHub.PublishProgressUpdate(
+							userID, mangaID, int32(chapter),
+						)
 					}
 				}
 			}
@@ -629,6 +639,41 @@ func main() {
 				"sent_count": sent,
 				"message":    req.Message,
 			})
+		})
+
+		// POST /notify/broadcast-ack — send with delivery confirmation (waits 3s for ACKs)
+		notifyRoutes.POST("/broadcast-ack", func(c *gin.Context) {
+			var req struct {
+				Type    string `json:"type"`
+				MangaID string `json:"manga_id"`
+				Message string `json:"message"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				utils.BadRequestResponse(c, "Invalid request body")
+				return
+			}
+			if server.UDPServer == nil {
+				utils.BadRequestResponse(c, "UDP server not running in local mode")
+				return
+			}
+			notif := udp.Notification{
+				Type:      req.Type,
+				MangaID:   req.MangaID,
+				Message:   req.Message,
+				Timestamp: time.Now().Unix(),
+			}
+			record := server.UDPServer.BroadcastWithACK(notif)
+			utils.SuccessResponse(c, "Broadcast with ACK complete", record)
+		})
+
+		// GET /notify/ack-stats — view recent delivery records
+		notifyRoutes.GET("/ack-stats", func(c *gin.Context) {
+			if server.UDPServer == nil {
+				utils.BadRequestResponse(c, "UDP server not running in local mode")
+				return
+			}
+			history := server.UDPServer.GetAckTracker().GetHistory()
+			utils.SuccessResponse(c, fmt.Sprintf("%d delivery records", len(history)), history)
 		})
 
 		notifyRoutes.GET("/status", func(c *gin.Context) {

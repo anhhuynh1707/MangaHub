@@ -1372,11 +1372,15 @@ $env:MANGAHUB_PROFILE = "bob"
 | CLI: grpc manga search | S8.10 | Done |
 | CLI: grpc progress update | S8.10 | Done |
 
-### Remaining (Not Yet Implemented)
-| Task | Port | Status |
-|------|------|--------|
-| Docker Compose | -- | Done |
-| Input Sanitization | -- | Pending |
+### Remaining / Bonus Features
+| Task | Status |
+|------|--------|
+| Docker Compose | Done |
+| Input Sanitization (5 pts) | Done |
+| OpenAPI / Swagger Documentation (5 pts) | Done |
+| GitHub Actions CI/CD Pipeline (10 pts) | Done |
+| UDP Delivery Confirmation — ACK system (5 pts) | Done |
+| gRPC Server-side Streaming (10 pts) | Done |
 
 ### Data Export/Import (10 points)
 | Feature | Test Section | Status |
@@ -1392,6 +1396,222 @@ $env:MANGAHUB_PROFILE = "bob"
 | API export endpoints (JSON/CSV download) | S14.8 | Done |
 | CSV storage functions | -- | Done |
 | MangaDex external import | S9.3 | Done |
+
+---
+
+## S15. Input Sanitization
+
+### S15.1 Manga Create — HTML Injection Rejected
+```powershell
+# Should return 400 "Invalid title: input must not contain < or >"
+curl -s -X POST http://localhost:8080/manga `
+  -H "Authorization: Bearer $ALICE_TOKEN" `
+  -H "Content-Type: application/json" `
+  -d '{"id":"test-xss","title":"<script>alert(1)</script>","author":"Hacker"}'
+```
+
+### S15.2 Manga Create — SQL Injection Rejected
+```powershell
+# Should return 400 — ID contains invalid character ";"
+curl -s -X POST http://localhost:8080/manga `
+  -H "Authorization: Bearer $ALICE_TOKEN" `
+  -H "Content-Type: application/json" `
+  -d '{"id":"id=1; DROP TABLE manga--","title":"Normal Title"}'
+```
+
+### S15.3 Review Text — Length Enforced
+```powershell
+# Should return 400 "Invalid review text: input exceeds maximum length of 2000 characters"
+$longText = "a" * 2001
+curl -s -X POST http://localhost:8080/manga/one-piece/reviews `
+  -H "Authorization: Bearer $ALICE_TOKEN" `
+  -H "Content-Type: application/json" `
+  -d "{\"rating\":8,\"text\":\"$longText\"}"
+```
+
+### S15.4 Valid Request Still Works
+```powershell
+# Should return 201 Created
+curl -s -X POST http://localhost:8080/manga `
+  -H "Authorization: Bearer $ALICE_TOKEN" `
+  -H "Content-Type: application/json" `
+  -d '{"id":"my-manga","title":"My Manga & Brotherhood","author":"Author Name"}'
+```
+
+---
+
+## S16. OpenAPI / Swagger Documentation
+
+### S16.1 Access Swagger UI
+Open in browser: **http://localhost:8080/swagger/index.html**
+
+- Click **Authorize** (top-right) → enter `Bearer <your-token>`
+- All 43 endpoints are listed across 7 tags: `auth`, `manga`, `users`, `reviews`, `friends`, `reading-lists`, `feed`
+- Click any endpoint → **Try it out** → **Execute**
+
+### S16.2 Verify Swagger JSON Spec
+```powershell
+# Should return valid JSON with paths object
+curl -s http://localhost:8080/swagger/doc.json | python3 -c "
+import sys, json
+spec = json.load(sys.stdin)
+print(f'Paths: {len(spec[\"paths\"])}')
+print(f'Info: {spec[\"info\"][\"title\"]} v{spec[\"info\"][\"version\"]}')
+"
+```
+Expected output:
+```
+Paths: 34
+Info: MangaHub API v1.0
+```
+
+---
+
+## S17. GitHub Actions CI/CD Pipeline
+
+### S17.1 Trigger CI
+Push any commit to `main` or open a PR:
+```powershell
+git push origin main
+```
+Go to **github.com/anhhuynh1707/MangaHub → Actions** tab.
+
+### S17.2 Expected Jobs
+| Job | Description | Trigger |
+|-----|-------------|---------|
+| **Build & Test** | Go build + unit tests + go vet | Push / PR |
+| **Docker Build & Smoke Test** | `docker compose build` + `up -d` + health check | After Build & Test passes |
+| **Publish to GHCR** | Pushes `ghcr.io/anhhuynh1707/mangahub:latest` | Push to main only |
+
+### S17.3 Pull Published Docker Image
+```powershell
+docker pull ghcr.io/anhhuynh1707/mangahub:latest
+docker run -p 8080:8080 ghcr.io/anhhuynh1707/mangahub:latest
+```
+
+---
+
+## S18. UDP Delivery Confirmation (ACK System)
+
+> The server sends a `notification_id` with each broadcast. Clients ACK within 3 seconds.
+> After the window closes, a `DeliveryRecord` reports who acknowledged.
+
+### S18.1 Register a Client (Terminal 1)
+```bash
+# Linux/macOS: listen on a random port and register
+nc -u localhost 9091 <<< '{"type":"register"}'
+# Keep this terminal open — it will receive broadcast + ack prompt
+```
+
+### S18.2 Send Broadcast-With-ACK (Terminal 2)
+```powershell
+# Returns delivery record after 3 seconds
+curl -s -X POST http://localhost:8080/notify/broadcast-ack `
+  -H "Authorization: Bearer $ALICE_TOKEN" `
+  -H "Content-Type: application/json" `
+  -d '{"type":"new_chapter","manga_id":"one-piece","message":"Chapter 1121!"}'
+```
+
+Expected response (after 3s):
+```json
+{
+  "success": true,
+  "data": {
+    "notif_id": "notif-1717481234567890000",
+    "message": "Chapter 1121!",
+    "sent_to": ["127.0.0.1:54321"],
+    "acked_by": [],
+    "unacked": ["127.0.0.1:54321"],
+    "ack_rate": 0.0,
+    "timed_out": true
+  }
+}
+```
+
+### S18.3 Send ACK from Client
+```bash
+# In the nc terminal, send the ACK with the notification_id received
+echo '{"type":"ack","notification_id":"notif-1717481234567890000"}' | nc -u localhost 9091
+```
+
+### S18.4 View Delivery History
+```powershell
+curl -s http://localhost:8080/notify/ack-stats `
+  -H "Authorization: Bearer $ALICE_TOKEN"
+```
+
+---
+
+## S19. gRPC Server-side Streaming
+
+> Two new streaming RPCs: `StreamSearch` (streams results one-by-one) and
+> `WatchMangaUpdates` (long-lived stream receiving live events).
+> Requires `grpcurl` or the Go gRPC client.
+
+### S19.1 Install grpcurl (if not installed)
+```bash
+brew install grpcurl          # macOS
+# or: go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+```
+
+### S19.2 StreamSearch — Stream Results One by One
+```bash
+# Each manga is sent as a separate message, not one big response
+grpcurl -plaintext \
+  -H "authorization: Bearer $ALICE_TOKEN" \
+  -d '{"query":"one","limit":5}' \
+  localhost:9092 mangahub.MangaService/StreamSearch
+```
+
+Expected: 5 separate JSON objects printed one after another as they stream.
+
+### S19.3 WatchMangaUpdates — Live Event Stream (Terminal 1)
+```bash
+# Keep this running — it blocks waiting for events
+grpcurl -plaintext \
+  -H "authorization: Bearer $ALICE_TOKEN" \
+  -d '{"manga_id":"","user_id":"user-alice"}' \
+  localhost:9092 mangahub.MangaService/WatchMangaUpdates
+```
+
+Expected initial response:
+```json
+{
+  "event_type": "connected",
+  "message": "Watching manga updates (filter: \"\")",
+  "timestamp": 1717481234
+}
+```
+
+### S19.4 Trigger a Live Event (Terminal 2)
+```powershell
+# Update progress — this publishes to the gRPC event hub
+curl -s -X PUT http://localhost:8080/users/progress `
+  -H "Authorization: Bearer $ALICE_TOKEN" `
+  -H "Content-Type: application/json" `
+  -d '{"manga_id":"one-piece","current_chapter":1095,"status":"reading"}'
+```
+
+Terminal 1 should immediately receive:
+```json
+{
+  "event_type": "progress_updated",
+  "manga_id": "one-piece",
+  "user_id": "user-alice",
+  "chapter": 1095,
+  "message": "User user-alice reached chapter 1095 of one-piece",
+  "timestamp": 1717481290
+}
+```
+
+### S19.5 Filter by Specific Manga
+```bash
+# Only receive events for "naruto", ignoring all others
+grpcurl -plaintext \
+  -H "authorization: Bearer $ALICE_TOKEN" \
+  -d '{"manga_id":"naruto","user_id":"user-alice"}' \
+  localhost:9092 mangahub.MangaService/WatchMangaUpdates
+```
 
 ---
 
