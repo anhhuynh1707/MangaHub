@@ -2,6 +2,7 @@ package manga
 
 import (
 	"mangahub/pkg/models"
+	"mangahub/pkg/sanitize"
 	"mangahub/pkg/utils"
 
 	"github.com/gin-gonic/gin"
@@ -72,6 +73,34 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
+	cleanID, err := sanitize.ID(manga.ID)
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid manga ID: "+err.Error())
+		return
+	}
+	manga.ID = cleanID
+
+	cleanTitle, err := sanitize.Text(manga.Title, sanitize.MaxMangaTitleLen)
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid title: "+err.Error())
+		return
+	}
+	manga.Title = cleanTitle
+
+	cleanAuthor, err := sanitize.Text(manga.Author, sanitize.MaxMangaAuthorLen)
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid author: "+err.Error())
+		return
+	}
+	manga.Author = cleanAuthor
+
+	cleanDesc, err := sanitize.Text(manga.Description, sanitize.MaxMangaDescLen)
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid description: "+err.Error())
+		return
+	}
+	manga.Description = cleanDesc
+
 	if err := h.service.Create(&manga); err != nil {
 		if err.Error() == "manga with this ID already exists" {
 			utils.ConflictResponse(c, err.Error())
@@ -95,6 +124,33 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 	manga.ID = id
+
+	if manga.Title != "" {
+		cleanTitle, err := sanitize.Text(manga.Title, sanitize.MaxMangaTitleLen)
+		if err != nil {
+			utils.BadRequestResponse(c, "Invalid title: "+err.Error())
+			return
+		}
+		manga.Title = cleanTitle
+	}
+
+	if manga.Author != "" {
+		cleanAuthor, err := sanitize.Text(manga.Author, sanitize.MaxMangaAuthorLen)
+		if err != nil {
+			utils.BadRequestResponse(c, "Invalid author: "+err.Error())
+			return
+		}
+		manga.Author = cleanAuthor
+	}
+
+	if manga.Description != "" {
+		cleanDesc, err := sanitize.Text(manga.Description, sanitize.MaxMangaDescLen)
+		if err != nil {
+			utils.BadRequestResponse(c, "Invalid description: "+err.Error())
+			return
+		}
+		manga.Description = cleanDesc
+	}
 
 	if err := h.service.Update(&manga); err != nil {
 		utils.NotFoundResponse(c, "Manga not found")

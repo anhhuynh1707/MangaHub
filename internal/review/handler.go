@@ -6,6 +6,7 @@ import (
 	"mangahub/internal/activity"
 	"mangahub/internal/auth"
 	"mangahub/internal/manga"
+	"mangahub/pkg/sanitize"
 	"mangahub/pkg/utils"
 
 	"github.com/gin-gonic/gin"
@@ -45,6 +46,13 @@ func (h *Handler) CreateReview(c *gin.Context) {
 		utils.BadRequestResponse(c, "Rating must be between 1 and 10")
 		return
 	}
+
+	cleanText, err := sanitize.Text(req.Text, sanitize.MaxReviewTextLen)
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid review text: "+err.Error())
+		return
+	}
+	req.Text = cleanText
 
 	review, err := h.service.CreateReview(userID, mangaID, req.Rating, req.Text)
 	if err != nil {
@@ -151,6 +159,13 @@ func (h *Handler) UpdateReview(c *gin.Context) {
 		utils.BadRequestResponse(c, "Rating must be between 1 and 10")
 		return
 	}
+
+	cleanText, err := sanitize.Text(req.Text, sanitize.MaxReviewTextLen)
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid review text: "+err.Error())
+		return
+	}
+	req.Text = cleanText
 
 	// Update review
 	err = h.service.UpdateReview(userID, reviewID, &req.Rating, &req.Text)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"mangahub/internal/auth"
+	"mangahub/pkg/sanitize"
 
 	ws "github.com/gorilla/websocket"
 )
@@ -263,6 +264,16 @@ func handleClientMessage(hub *ChatHub, client *ChatClient, msg *ChatMessage) {
 
 	// Regular chat message — broadcast to all in the same room
 	if text != "" {
+		clean, err := sanitize.ChatMessage(text)
+		if err != nil {
+			hub.SendToClient(client, ChatMessage{
+				Type:      "error",
+				Message:   "Message rejected: " + err.Error(),
+				Timestamp: time.Now().Unix(),
+			})
+			return
+		}
+		msg.Message = clean
 		msg.Type = "message"
 		msg.Room = client.Room
 		hub.Broadcast <- *msg

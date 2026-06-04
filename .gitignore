@@ -51,3 +51,8 @@ config.json
 # --- Build Binaries ---
 *.exe
 bin/
+
+mangahub
+TASKS.html
+
+MangaHub - Manga & Comic Tracking System.html
