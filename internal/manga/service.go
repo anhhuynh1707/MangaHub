@@ -161,6 +161,11 @@ func (s *Service) GetCount() (int, error) {
 	return count, nil
 }
 
+// SearchByFilters performs advanced filtering using the SearchFilters struct.
+func (s *Service) SearchByFilters(f *models.SearchFilters) ([]models.Manga, int, error) {
+	return s.repo.SearchByFilters(f)
+}
+
 // BulkCreate creates multiple manga at once (used for seeding).
 func (s *Service) BulkCreate(mangaList []models.Manga) (int, error) {
 	inserted, err := s.repo.BulkCreate(mangaList)

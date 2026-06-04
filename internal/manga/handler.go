@@ -79,6 +79,49 @@ func (h *Handler) GetByID(c *gin.Context) {
 	utils.SuccessResponse(c, "Manga retrieved", manga)
 }
 
+// AdvancedSearch performs full-text search with multiple filters.
+//
+// @Summary      Advanced manga search
+// @Description  Search manga with multi-genre OR filter, minimum rating, and sort options (popularity/rating/recent/title)
+// @Tags         manga
+// @Accept       json
+// @Produce      json
+// @Param        body  body      models.SearchFilters  true  "Search filters"
+// @Success      200   {object}  utils.APIResponse     "Filtered manga list"
+// @Failure      400   {object}  utils.APIResponse     "Invalid request"
+// @Router       /manga/search [post]
+func (h *Handler) AdvancedSearch(c *gin.Context) {
+	var f models.SearchFilters
+	if err := c.ShouldBindJSON(&f); err != nil {
+		utils.BadRequestResponse(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	mangaList, total, err := h.service.SearchByFilters(&f)
+	if err != nil {
+		utils.InternalServerErrorResponse(c, "Search failed")
+		return
+	}
+
+	page := f.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := f.Limit
+	if limit < 1 {
+		limit = 20
+	}
+
+	utils.SuccessResponse(c, "Advanced search results", gin.H{
+		"manga":  mangaList,
+		"total":  total,
+		"page":   page,
+		"limit":  limit,
+		"pages":  (total + limit - 1) / limit,
+		"filters": f,
+	})
+}
+
 // Create creates a new manga entry.
 //
 // @Summary      Create manga

@@ -17,6 +17,7 @@ import (
 	"mangahub/internal/friend"
 	grpcServer "mangahub/internal/grpc"
 	mangaPkg "mangahub/internal/manga"
+	"mangahub/internal/recommendation"
 	"mangahub/internal/review"
 	"mangahub/internal/sharedlist"
 	"mangahub/internal/tcp"
@@ -435,6 +436,7 @@ func main() {
 
 	// Manga routes (public read)
 	r.GET("/manga", mangaHandler.Search)
+	r.POST("/manga/search", mangaHandler.AdvancedSearch) // advanced search with SearchFilters body
 	r.GET("/manga/:id", mangaHandler.GetByID)
 
 	// Manga routes (authenticated write)
@@ -446,6 +448,9 @@ func main() {
 		mangaAuth.DELETE("/:id", mangaHandler.Delete)
 	}
 
+	// Recommendation service — shared across routes
+	recService := recommendation.NewService(db)
+
 	// User routes (authenticated)
 	users := r.Group("/users")
 	users.Use(auth.AuthMiddleware())
@@ -454,6 +459,25 @@ func main() {
 		users.POST("/library", userHandler.AddToLibrary)
 		users.GET("/library", userHandler.GetLibrary)
 		users.DELETE("/library/:manga_id", userHandler.RemoveFromLibrary)
+
+		// GET /users/recommendations — collaborative filtering based on reading history
+		users.GET("/recommendations", func(c *gin.Context) {
+			userID, err := auth.GetUserIDFromContext(c)
+			if err != nil {
+				utils.UnauthorizedResponse(c, "Unauthorized")
+				return
+			}
+			limitStr := c.DefaultQuery("limit", "10")
+			limit := 10
+			fmt.Sscanf(limitStr, "%d", &limit)
+
+			result, err := recService.GetRecommendations(userID, limit)
+			if err != nil {
+				utils.InternalServerErrorResponse(c, "Failed to generate recommendations: "+err.Error())
+				return
+			}
+			utils.SuccessResponse(c, "Recommendations generated", result)
+		})
 		users.PUT("/progress", func(c *gin.Context) {
 			// Call the original handler
 			userHandler.UpdateProgress(c)

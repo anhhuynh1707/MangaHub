@@ -81,11 +81,35 @@ type UpdateProgressRequest struct {
 
 // MangaSearchQuery holds query parameters for searching manga.
 type MangaSearchQuery struct {
-	Search string `form:"search"`
-	Genre  string `form:"genre"`
-	Status string `form:"status"`
-	Page   int    `form:"page,default=1"`
-	Limit  int    `form:"limit,default=20"`
+	Search    string   `form:"search"`
+	Genre     string   `form:"genre"`              // single genre (legacy)
+	Genres    []string `form:"genres"`             // multi-genre OR filter
+	Status    string   `form:"status"`
+	MinRating float64  `form:"min_rating"`         // minimum avg review rating (1-10)
+	SortBy    string   `form:"sort_by"`            // "title"(default),"popularity","rating","recent"
+	Page      int      `form:"page,default=1"`
+	Limit     int      `form:"limit,default=20"`
+}
+
+// SearchFilters is the spec-required struct for advanced search with multiple filters.
+type SearchFilters struct {
+	Search    string   `json:"search"`
+	Genres    []string `json:"genres"`
+	Status    string   `json:"status"`
+	YearRange [2]int   `json:"year_range"` // [minChapters, maxChapters] — used as chapter range proxy
+	MinRating float64  `json:"min_rating"` // minimum avg rating from reviews (0 = no filter)
+	SortBy    string   `json:"sort_by"`    // "title","popularity","rating","recent"
+	Page      int      `json:"page"`
+	Limit     int      `json:"limit"`
+}
+
+// UserProfile captures a user's reading history for the recommendation engine.
+type UserProfile struct {
+	UserID         string            `json:"user_id"`
+	ReadManga      []string          `json:"read_manga"`      // all manga IDs in library
+	CompletedManga []string          `json:"completed_manga"` // manga with status=completed
+	Ratings        map[string]int    `json:"ratings"`         // manga_id -> rating from reviews
+	GenreScores    map[string]float64 `json:"genre_scores"`   // genre -> accumulated score
 }
 
 // ChangePasswordRequest is the payload for changing a user's password.
