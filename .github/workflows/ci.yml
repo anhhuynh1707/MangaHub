@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod   # reads the exact version from go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Build — api-server
+        run: go build ./cmd/api-server/
+
+      - name: Build — tcp-server
+        run: go build ./cmd/tcp-server/
+
+      - name: Build — udp-server
+        run: go build ./cmd/udp-server/
+
+      - name: Build — grpc-server
+        run: go build ./cmd/grpc-server/
+
+      - name: Build — cli
+        run: go build ./cmd/cli/
+
+      - name: Run tests (auth)
+        run: go test -race -v -timeout 30s ./internal/auth/...
+
+      - name: Run tests (tcp)
+        run: go test -race -v -timeout 30s ./internal/tcp/...
+
+      - name: Vet
+        run: go vet ./...
