@@ -140,6 +140,16 @@ func (h *Handler) GetReviews(c *gin.Context) {
 }
 
 // GetReview handles GET /reviews/:review_id
+//
+// @Summary      Get a review
+// @Description  Retrieve a single review by its ID
+// @Tags         reviews
+// @Produce      json
+// @Param        review_id  path      string  true  "Review ID"
+// @Success      200        {object}  utils.APIResponse  "Review data"
+// @Failure      404        {object}  utils.APIResponse  "Review not found"
+// @Security     BearerAuth
+// @Router       /reviews/{review_id} [get]
 func (h *Handler) GetReview(c *gin.Context) {
 	reviewID := c.Param("review_id")
 
@@ -153,6 +163,20 @@ func (h *Handler) GetReview(c *gin.Context) {
 }
 
 // UpdateReview handles PUT /reviews/:review_id
+//
+// @Summary      Update a review
+// @Description  Edit the rating or text of your own review
+// @Tags         reviews
+// @Accept       json
+// @Produce      json
+// @Param        review_id  path      string  true  "Review ID"
+// @Param        body       body      object  true  "Updated review — {rating: int (1-10), text: string}"
+// @Success      200        {object}  utils.APIResponse  "Review updated"
+// @Failure      400        {object}  utils.APIResponse  "Invalid rating"
+// @Failure      401        {object}  utils.APIResponse  "Unauthorized"
+// @Failure      403        {object}  utils.APIResponse  "Not your review"
+// @Security     BearerAuth
+// @Router       /reviews/{review_id} [put]
 func (h *Handler) UpdateReview(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -206,6 +230,17 @@ func (h *Handler) UpdateReview(c *gin.Context) {
 }
 
 // DeleteReview handles DELETE /reviews/:review_id
+//
+// @Summary      Delete a review
+// @Description  Permanently remove your own review
+// @Tags         reviews
+// @Produce      json
+// @Param        review_id  path      string  true  "Review ID"
+// @Success      200        {object}  utils.APIResponse  "Review deleted"
+// @Failure      401        {object}  utils.APIResponse  "Unauthorized"
+// @Failure      403        {object}  utils.APIResponse  "Not your review"
+// @Security     BearerAuth
+// @Router       /reviews/{review_id} [delete]
 func (h *Handler) DeleteReview(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -232,6 +267,15 @@ func (h *Handler) DeleteReview(c *gin.Context) {
 }
 
 // MarkHelpful handles POST /reviews/:review_id/helpful
+//
+// @Summary      Mark review as helpful
+// @Description  Increment the helpful vote counter on a review
+// @Tags         reviews
+// @Produce      json
+// @Param        review_id  path      string  true  "Review ID"
+// @Success      200        {object}  utils.APIResponse  "Helpful count updated"
+// @Failure      500        {object}  utils.APIResponse  "Server error"
+// @Router       /reviews/{review_id}/helpful [post]
 func (h *Handler) MarkHelpful(c *gin.Context) {
 	reviewID := c.Param("review_id")
 
@@ -246,6 +290,15 @@ func (h *Handler) MarkHelpful(c *gin.Context) {
 }
 
 // GetRatingStats handles GET /manga/:id/rating-stats
+//
+// @Summary      Get rating statistics
+// @Description  Return average rating, total review count, and distribution for a manga
+// @Tags         reviews
+// @Produce      json
+// @Param        id   path      string  true  "Manga ID"
+// @Success      200  {object}  utils.APIResponse  "Rating stats"
+// @Failure      500  {object}  utils.APIResponse  "Server error"
+// @Router       /manga/{id}/rating-stats [get]
 func (h *Handler) GetRatingStats(c *gin.Context) {
 	mangaID := c.Param("id")
 

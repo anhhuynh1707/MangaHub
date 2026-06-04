@@ -21,6 +21,18 @@ func NewHandler(service *Service, activityService *activity.Service) *Handler {
 }
 
 // CreateList handles POST /reading-lists/create
+//
+// @Summary      Create reading list
+// @Description  Create a new reading list with a title, description, and initial manga IDs
+// @Tags         reading-lists
+// @Accept       json
+// @Produce      json
+// @Param        body  body      object  true  "Reading list — {title, description, manga_list: [], is_public: bool}"
+// @Success      200   {object}  utils.APIResponse  "Reading list created"
+// @Failure      400   {object}  utils.APIResponse  "Missing title or manga_list"
+// @Failure      401   {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /reading-lists/create [post]
 func (h *Handler) CreateList(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -76,6 +88,17 @@ func (h *Handler) CreateList(c *gin.Context) {
 }
 
 // GetMyLists handles GET /reading-lists/mine
+//
+// @Summary      Get my reading lists
+// @Description  Return all reading lists owned by the authenticated user
+// @Tags         reading-lists
+// @Produce      json
+// @Param        page   query     int  false  "Page number (default 1)"
+// @Param        limit  query     int  false  "Results per page (default 20)"
+// @Success      200    {object}  utils.APIResponse  "My reading lists"
+// @Failure      401    {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /reading-lists/mine [get]
 func (h *Handler) GetMyLists(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -145,6 +168,15 @@ func (h *Handler) GetMyLists(c *gin.Context) {
 }
 
 // GetPublicLists handles GET /reading-lists/public
+//
+// @Summary      Browse public reading lists
+// @Description  List all publicly shared reading lists with pagination (no auth required)
+// @Tags         reading-lists
+// @Produce      json
+// @Param        page   query     int  false  "Page number (default 1)"
+// @Param        limit  query     int  false  "Results per page (default 20)"
+// @Success      200    {object}  utils.APIResponse  "Public reading lists"
+// @Router       /reading-lists/public [get]
 func (h *Handler) GetPublicLists(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	limitStr := c.DefaultQuery("limit", "20")
@@ -194,6 +226,16 @@ func (h *Handler) GetPublicLists(c *gin.Context) {
 }
 
 // GetList handles GET /reading-lists/:list_id
+//
+// @Summary      Get reading list by ID
+// @Description  Retrieve a single reading list. Public lists are accessible without auth; private lists require the owner or a shared user.
+// @Tags         reading-lists
+// @Produce      json
+// @Param        list_id  path      string  true  "Reading list ID"
+// @Success      200      {object}  utils.APIResponse  "Reading list data"
+// @Failure      403      {object}  utils.APIResponse  "Access denied"
+// @Failure      404      {object}  utils.APIResponse  "List not found"
+// @Router       /reading-lists/{list_id} [get]
 func (h *Handler) GetList(c *gin.Context) {
 	listID := c.Param("list_id")
 
@@ -287,6 +329,18 @@ func (h *Handler) DeleteList(c *gin.Context) {
 }
 
 // SubscribeToList handles POST /reading-lists/:list_id/subscribe
+//
+// @Summary      Subscribe to a reading list
+// @Description  Follow a public reading list owned by another user
+// @Tags         reading-lists
+// @Produce      json
+// @Param        list_id  path      string  true  "Reading list ID"
+// @Success      200      {object}  utils.APIResponse  "Subscribed successfully"
+// @Failure      400      {object}  utils.APIResponse  "Already subscribed or own list"
+// @Failure      401      {object}  utils.APIResponse  "Unauthorized"
+// @Failure      404      {object}  utils.APIResponse  "List not found"
+// @Security     BearerAuth
+// @Router       /reading-lists/{list_id}/subscribe [post]
 func (h *Handler) SubscribeToList(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -338,6 +392,17 @@ func (h *Handler) SubscribeToList(c *gin.Context) {
 }
 
 // UnsubscribeFromList handles DELETE /reading-lists/:list_id/subscribe
+//
+// @Summary      Unsubscribe from a reading list
+// @Description  Stop following a reading list you previously subscribed to
+// @Tags         reading-lists
+// @Produce      json
+// @Param        list_id  path      string  true  "Reading list ID"
+// @Success      200      {object}  utils.APIResponse  "Unsubscribed successfully"
+// @Failure      400      {object}  utils.APIResponse  "Not subscribed"
+// @Failure      401      {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /reading-lists/{list_id}/subscribe [delete]
 func (h *Handler) UnsubscribeFromList(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -383,6 +448,15 @@ func (h *Handler) UnsubscribeFromList(c *gin.Context) {
 }
 
 // GetSubscribedLists handles GET /reading-lists/subscribed
+//
+// @Summary      Get subscribed reading lists
+// @Description  Return all public reading lists that the authenticated user has subscribed to
+// @Tags         reading-lists
+// @Produce      json
+// @Success      200  {object}  utils.APIResponse  "Subscribed lists"
+// @Failure      401  {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /reading-lists/subscribed [get]
 func (h *Handler) GetSubscribedLists(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -426,6 +500,20 @@ func (h *Handler) GetSubscribedLists(c *gin.Context) {
 }
 
 // AddMangaToList handles POST /reading-lists/:list_id/manga
+//
+// @Summary      Add manga to reading list
+// @Description  Append a manga to one of your own reading lists
+// @Tags         reading-lists
+// @Accept       json
+// @Produce      json
+// @Param        list_id  path      string  true  "Reading list ID"
+// @Param        body     body      object  true  "Manga to add — {manga_id: string}"
+// @Success      200      {object}  utils.APIResponse  "Manga added"
+// @Failure      400      {object}  utils.APIResponse  "Manga already in list"
+// @Failure      401      {object}  utils.APIResponse  "Unauthorized"
+// @Failure      403      {object}  utils.APIResponse  "Not your list"
+// @Security     BearerAuth
+// @Router       /reading-lists/{list_id}/manga [post]
 func (h *Handler) AddMangaToList(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -478,6 +566,19 @@ func (h *Handler) AddMangaToList(c *gin.Context) {
 }
 
 // RemoveMangaFromList handles DELETE /reading-lists/:list_id/manga/:manga_id
+//
+// @Summary      Remove manga from reading list
+// @Description  Remove a specific manga from one of your reading lists
+// @Tags         reading-lists
+// @Produce      json
+// @Param        list_id   path      string  true  "Reading list ID"
+// @Param        manga_id  path      string  true  "Manga ID to remove"
+// @Success      200       {object}  utils.APIResponse  "Manga removed"
+// @Failure      401       {object}  utils.APIResponse  "Unauthorized"
+// @Failure      403       {object}  utils.APIResponse  "Not your list"
+// @Failure      404       {object}  utils.APIResponse  "Manga not in list"
+// @Security     BearerAuth
+// @Router       /reading-lists/{list_id}/manga/{manga_id} [delete]
 func (h *Handler) RemoveMangaFromList(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {

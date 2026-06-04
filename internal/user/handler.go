@@ -320,7 +320,14 @@ func (h *Handler) AuthStatus(c *gin.Context) {
 
 // Logout is a no-op for stateless JWT auth.
 // The client should discard the token.
-// POST /auth/logout
+//
+// @Summary      Logout
+// @Description  Stateless logout — invalidates nothing server-side. The client must discard the JWT token.
+// @Tags         auth
+// @Produce      json
+// @Success      200  {object}  utils.APIResponse  "Logged out"
+// @Security     BearerAuth
+// @Router       /auth/logout [post]
 func (h *Handler) Logout(c *gin.Context) {
 	utils.SuccessResponse(c, "Logged out successfully. Discard your token.", nil)
 }

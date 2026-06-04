@@ -164,6 +164,22 @@ paths:
       summary: Login
       tags:
       - auth
+  /auth/logout:
+    post:
+      description: Stateless logout — invalidates nothing server-side. The client
+        must discard the JWT token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logged out
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Logout
+      tags:
+      - auth
   /auth/register:
     post:
       consumes:
@@ -213,6 +229,226 @@ paths:
       summary: Check auth status
       tags:
       - auth
+  /feed/activities:
+    get:
+      description: Retrieve the global activity feed across all users with optional
+        type filter and pagination
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by activity type (e.g. manga_completed, review_written)
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Activity feed
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get activity feed
+      tags:
+      - feed
+    post:
+      consumes:
+      - application/json
+      description: Publish a custom user activity message to the feed
+      parameters:
+      - description: 'Activity payload — {message: string}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Activity posted
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Post a manual activity
+      tags:
+      - feed
+  /feed/stats:
+    get:
+      description: Return a count breakdown of your activities by type (manga_completed,
+        review_written, etc.)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Activity stats by type
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get activity statistics
+      tags:
+      - feed
+  /feed/timeline:
+    get:
+      description: Return a combined chronological feed of activities from the authenticated
+        user and their friends
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Timeline feed
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get friends timeline
+      tags:
+      - feed
+  /friends/{friend_id}:
+    delete:
+      description: Remove an existing friend from your friends list
+      parameters:
+      - description: Friend's user ID
+        in: path
+        name: friend_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Friend removed
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove friend
+      tags:
+      - friends
+  /friends/{friend_id}/accept:
+    post:
+      description: Accept a pending friend request from another user
+      parameters:
+      - description: Friend's user ID
+        in: path
+        name: friend_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Friend request accepted
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Accept friend request
+      tags:
+      - friends
+  /friends/{friend_id}/decline:
+    post:
+      description: Decline or cancel a pending friend request
+      parameters:
+      - description: Friend's user ID
+        in: path
+        name: friend_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Friend request declined
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Decline friend request
+      tags:
+      - friends
+  /friends/add:
+    post:
+      consumes:
+      - application/json
+      description: Send a friend request to another user by their user ID
+      parameters:
+      - description: 'Friend request — {friend_id: string}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Friend request sent
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Cannot add yourself
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Send friend request
+      tags:
+      - friends
   /manga:
     get:
       description: Search and filter the manga catalogue. Supports keyword search,
@@ -378,6 +614,30 @@ paths:
       summary: Update manga
       tags:
       - manga
+  /manga/{id}/rating-stats:
+    get:
+      description: Return average rating, total review count, and distribution for
+        a manga
+      parameters:
+      - description: Manga ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Rating stats
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      summary: Get rating statistics
+      tags:
+      - reviews
   /manga/{id}/reviews:
     get:
       description: List all reviews for a manga with pagination
@@ -445,6 +705,489 @@ paths:
       summary: Create a review
       tags:
       - reviews
+  /reading-lists/{list_id}:
+    get:
+      description: Retrieve a single reading list. Public lists are accessible without
+        auth; private lists require the owner or a shared user.
+      parameters:
+      - description: Reading list ID
+        in: path
+        name: list_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reading list data
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: List not found
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      summary: Get reading list by ID
+      tags:
+      - reading-lists
+  /reading-lists/{list_id}/manga:
+    post:
+      consumes:
+      - application/json
+      description: Append a manga to one of your own reading lists
+      parameters:
+      - description: Reading list ID
+        in: path
+        name: list_id
+        required: true
+        type: string
+      - description: 'Manga to add — {manga_id: string}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manga added
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Manga already in list
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "403":
+          description: Not your list
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Add manga to reading list
+      tags:
+      - reading-lists
+  /reading-lists/{list_id}/manga/{manga_id}:
+    delete:
+      description: Remove a specific manga from one of your reading lists
+      parameters:
+      - description: Reading list ID
+        in: path
+        name: list_id
+        required: true
+        type: string
+      - description: Manga ID to remove
+        in: path
+        name: manga_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manga removed
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "403":
+          description: Not your list
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: Manga not in list
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove manga from reading list
+      tags:
+      - reading-lists
+  /reading-lists/{list_id}/subscribe:
+    delete:
+      description: Stop following a reading list you previously subscribed to
+      parameters:
+      - description: Reading list ID
+        in: path
+        name: list_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Unsubscribed successfully
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Not subscribed
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Unsubscribe from a reading list
+      tags:
+      - reading-lists
+    post:
+      description: Follow a public reading list owned by another user
+      parameters:
+      - description: Reading list ID
+        in: path
+        name: list_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscribed successfully
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Already subscribed or own list
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: List not found
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Subscribe to a reading list
+      tags:
+      - reading-lists
+  /reading-lists/create:
+    post:
+      consumes:
+      - application/json
+      description: Create a new reading list with a title, description, and initial
+        manga IDs
+      parameters:
+      - description: 'Reading list — {title, description, manga_list: [], is_public:
+          bool}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reading list created
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Missing title or manga_list
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Create reading list
+      tags:
+      - reading-lists
+  /reading-lists/mine:
+    get:
+      description: Return all reading lists owned by the authenticated user
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: My reading lists
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my reading lists
+      tags:
+      - reading-lists
+  /reading-lists/public:
+    get:
+      description: List all publicly shared reading lists with pagination (no auth
+        required)
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Public reading lists
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      summary: Browse public reading lists
+      tags:
+      - reading-lists
+  /reading-lists/subscribed:
+    get:
+      description: Return all public reading lists that the authenticated user has
+        subscribed to
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscribed lists
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get subscribed reading lists
+      tags:
+      - reading-lists
+  /reviews/{review_id}:
+    delete:
+      description: Permanently remove your own review
+      parameters:
+      - description: Review ID
+        in: path
+        name: review_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Review deleted
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "403":
+          description: Not your review
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a review
+      tags:
+      - reviews
+    get:
+      description: Retrieve a single review by its ID
+      parameters:
+      - description: Review ID
+        in: path
+        name: review_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Review data
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "404":
+          description: Review not found
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a review
+      tags:
+      - reviews
+    put:
+      consumes:
+      - application/json
+      description: Edit the rating or text of your own review
+      parameters:
+      - description: Review ID
+        in: path
+        name: review_id
+        required: true
+        type: string
+      - description: 'Updated review — {rating: int (1-10), text: string}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Review updated
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "400":
+          description: Invalid rating
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "403":
+          description: Not your review
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a review
+      tags:
+      - reviews
+  /reviews/{review_id}/helpful:
+    post:
+      description: Increment the helpful vote counter on a review
+      parameters:
+      - description: Review ID
+        in: path
+        name: review_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Helpful count updated
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      summary: Mark review as helpful
+      tags:
+      - reviews
+  /users/{user_id}/activities:
+    get:
+      description: Retrieve the activity history for a specific user by their user
+        ID
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by activity type
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User activities
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get activities for a user
+      tags:
+      - feed
+  /users/friends:
+    get:
+      description: Get the authenticated user's friends list with pagination
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Friends list
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List friends
+      tags:
+      - friends
+  /users/friends/pending:
+    get:
+      description: Get all incoming friend requests awaiting acceptance
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Pending requests
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List pending friend requests
+      tags:
+      - friends
   /users/library:
     get:
       description: Returns the user's manga library categorised by status (reading

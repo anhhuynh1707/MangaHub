@@ -20,6 +20,18 @@ func NewHandler(service *Service, activityService *activity.Service) *Handler {
 }
 
 // AddFriend handles POST /friends/add
+//
+// @Summary      Send friend request
+// @Description  Send a friend request to another user by their user ID
+// @Tags         friends
+// @Accept       json
+// @Produce      json
+// @Param        body  body      object  true  "Friend request — {friend_id: string}"
+// @Success      200   {object}  utils.APIResponse  "Friend request sent"
+// @Failure      400   {object}  utils.APIResponse  "Cannot add yourself"
+// @Failure      401   {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /friends/add [post]
 func (h *Handler) AddFriend(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -51,6 +63,16 @@ func (h *Handler) AddFriend(c *gin.Context) {
 }
 
 // AcceptFriend handles POST /friends/:friend_id/accept
+//
+// @Summary      Accept friend request
+// @Description  Accept a pending friend request from another user
+// @Tags         friends
+// @Produce      json
+// @Param        friend_id  path      string  true  "Friend's user ID"
+// @Success      200        {object}  utils.APIResponse  "Friend request accepted"
+// @Failure      401        {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /friends/{friend_id}/accept [post]
 func (h *Handler) AcceptFriend(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -79,6 +101,16 @@ func (h *Handler) AcceptFriend(c *gin.Context) {
 }
 
 // DeclineFriend handles POST /friends/:friend_id/decline
+//
+// @Summary      Decline friend request
+// @Description  Decline or cancel a pending friend request
+// @Tags         friends
+// @Produce      json
+// @Param        friend_id  path      string  true  "Friend's user ID"
+// @Success      200        {object}  utils.APIResponse  "Friend request declined"
+// @Failure      401        {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /friends/{friend_id}/decline [post]
 func (h *Handler) DeclineFriend(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -99,6 +131,16 @@ func (h *Handler) DeclineFriend(c *gin.Context) {
 }
 
 // RemoveFriend handles DELETE /friends/:friend_id
+//
+// @Summary      Remove friend
+// @Description  Remove an existing friend from your friends list
+// @Tags         friends
+// @Produce      json
+// @Param        friend_id  path      string  true  "Friend's user ID"
+// @Success      200        {object}  utils.APIResponse  "Friend removed"
+// @Failure      401        {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /friends/{friend_id} [delete]
 func (h *Handler) RemoveFriend(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -142,6 +184,17 @@ func (h *Handler) BlockFriend(c *gin.Context) {
 }
 
 // GetFriends handles GET /users/friends
+//
+// @Summary      List friends
+// @Description  Get the authenticated user's friends list with pagination
+// @Tags         friends
+// @Produce      json
+// @Param        page   query     int  false  "Page number (default 1)"
+// @Param        limit  query     int  false  "Results per page (default 20)"
+// @Success      200    {object}  utils.APIResponse  "Friends list"
+// @Failure      401    {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /users/friends [get]
 func (h *Handler) GetFriends(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -198,6 +251,17 @@ func (h *Handler) GetFriends(c *gin.Context) {
 }
 
 // GetPendingRequests handles GET /users/friends/pending
+//
+// @Summary      List pending friend requests
+// @Description  Get all incoming friend requests awaiting acceptance
+// @Tags         friends
+// @Produce      json
+// @Param        page   query     int  false  "Page number (default 1)"
+// @Param        limit  query     int  false  "Results per page (default 20)"
+// @Success      200    {object}  utils.APIResponse  "Pending requests"
+// @Failure      401    {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /users/friends/pending [get]
 func (h *Handler) GetPendingRequests(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {

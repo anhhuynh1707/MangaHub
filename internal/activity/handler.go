@@ -21,6 +21,18 @@ func NewHandler(service *Service) *Handler {
 }
 
 // PostActivity handles POST /feed/activities
+//
+// @Summary      Post a manual activity
+// @Description  Publish a custom user activity message to the feed
+// @Tags         feed
+// @Accept       json
+// @Produce      json
+// @Param        body  body      object  true  "Activity payload — {message: string}"
+// @Success      200   {object}  utils.APIResponse  "Activity posted"
+// @Failure      400   {object}  utils.APIResponse  "Invalid request"
+// @Failure      401   {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /feed/activities [post]
 func (h *Handler) PostActivity(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -50,6 +62,18 @@ func (h *Handler) PostActivity(c *gin.Context) {
 }
 
 // GetActivityFeed handles GET /feed/activities
+//
+// @Summary      Get activity feed
+// @Description  Retrieve the global activity feed across all users with optional type filter and pagination
+// @Tags         feed
+// @Produce      json
+// @Param        page   query     int     false  "Page number (default 1)"
+// @Param        limit  query     int     false  "Results per page (default 20)"
+// @Param        type   query     string  false  "Filter by activity type (e.g. manga_completed, review_written)"
+// @Success      200    {object}  utils.APIResponse  "Activity feed"
+// @Failure      401    {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /feed/activities [get]
 func (h *Handler) GetActivityFeed(c *gin.Context) {
 	_, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -101,6 +125,19 @@ func (h *Handler) GetActivityFeed(c *gin.Context) {
 }
 
 // GetUserActivities handles GET /users/:user_id/activities
+//
+// @Summary      Get activities for a user
+// @Description  Retrieve the activity history for a specific user by their user ID
+// @Tags         feed
+// @Produce      json
+// @Param        user_id  path      string  true   "User ID"
+// @Param        page     query     int     false  "Page number (default 1)"
+// @Param        limit    query     int     false  "Results per page (default 20)"
+// @Param        type     query     string  false  "Filter by activity type"
+// @Success      200      {object}  utils.APIResponse  "User activities"
+// @Failure      500      {object}  utils.APIResponse  "Server error"
+// @Security     BearerAuth
+// @Router       /users/{user_id}/activities [get]
 func (h *Handler) GetUserActivities(c *gin.Context) {
 	userID := c.Param("user_id")
 
@@ -148,6 +185,15 @@ func (h *Handler) GetUserActivities(c *gin.Context) {
 }
 
 // GetActivityStats handles GET /feed/stats
+//
+// @Summary      Get activity statistics
+// @Description  Return a count breakdown of your activities by type (manga_completed, review_written, etc.)
+// @Tags         feed
+// @Produce      json
+// @Success      200  {object}  utils.APIResponse  "Activity stats by type"
+// @Failure      401  {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /feed/stats [get]
 func (h *Handler) GetActivityStats(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
@@ -224,6 +270,17 @@ func (h *Handler) SearchActivities(c *gin.Context) {
 }
 
 // GetTimelineView handles GET /feed/timeline
+//
+// @Summary      Get friends timeline
+// @Description  Return a combined chronological feed of activities from the authenticated user and their friends
+// @Tags         feed
+// @Produce      json
+// @Param        page   query     int  false  "Page number (default 1)"
+// @Param        limit  query     int  false  "Results per page (default 20)"
+// @Success      200    {object}  utils.APIResponse  "Timeline feed"
+// @Failure      401    {object}  utils.APIResponse  "Unauthorized"
+// @Security     BearerAuth
+// @Router       /feed/timeline [get]
 func (h *Handler) GetTimelineView(c *gin.Context) {
 	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
