@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"io"
 	"time"
 
 	pb "mangahub/internal/grpc/pb"
@@ -85,4 +86,51 @@ func (c *MangaClient) UpdateProgress(userID, mangaID string, chapter int32) (*pb
 		MangaId: mangaID,
 		Chapter: chapter,
 	})
+}
+
+// StreamSearch streams manga results one by one via server-side streaming.
+// onResult is called for each received MangaResponse until the stream ends.
+func (c *MangaClient) StreamSearch(query, genre string, limit int32, onResult func(*pb.MangaResponse)) error {
+	ctx := c.withAuth(context.Background())
+	stream, err := c.client.StreamSearch(ctx, &pb.SearchRequest{
+		Query: query,
+		Genre: genre,
+		Limit: limit,
+	})
+	if err != nil {
+		return err
+	}
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		onResult(resp)
+	}
+}
+
+// WatchMangaUpdates subscribes to real-time manga events via server-side streaming.
+// onEvent is called for each event. The stream runs until ctx is cancelled or the server closes it.
+func (c *MangaClient) WatchMangaUpdates(ctx context.Context, mangaID, userID string, onEvent func(*pb.MangaEvent)) error {
+	ctx = c.withAuth(ctx)
+	stream, err := c.client.WatchMangaUpdates(ctx, &pb.WatchRequest{
+		MangaId: mangaID,
+		UserId:  userID,
+	})
+	if err != nil {
+		return err
+	}
+	for {
+		event, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		onEvent(event)
+	}
 }
