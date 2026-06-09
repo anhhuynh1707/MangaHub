@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, Menu, LogOut, User } from 'lucide-react'
+import { BookOpen, Menu, LogOut, User, KeyRound } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -53,6 +53,13 @@ export function Navbar() {
           >
             <User className="h-4 w-4" />
             {username}
+          </Link>
+          <Link
+            to="/change-password"
+            className="rounded-lg p-1.5 text-[var(--color-muted-raw)] hover:bg-[var(--color-surface2)] hover:text-[var(--color-text2)] no-underline"
+            aria-label="Change password"
+          >
+            <KeyRound className="h-4 w-4" />
           </Link>
           <button
             onClick={handleLogout}

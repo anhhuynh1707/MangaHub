@@ -8,13 +8,11 @@ export interface Manga {
   genres: string[]
   status: string
   total_chapters: number
-  cover_image?: string
-  average_rating?: number
-  year?: number
+  cover_url?: string
 }
 
-export interface MangaListResponse {
-  data: Manga[]
+export interface MangaSearchResponse {
+  manga: Manga[]
   total: number
   page: number
   limit: number
@@ -30,15 +28,36 @@ export interface SearchFilters {
   limit?: number
 }
 
+export const GENRES = [
+  'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy',
+  'Horror', 'Mystery', 'Romance', 'Sci-Fi', 'Shounen',
+  'Shoujo', 'Slice of Life', 'Sports', 'Supernatural', 'Thriller',
+]
+
+export const SORT_OPTIONS = [
+  { value: 'title',      label: 'Title A–Z' },
+  { value: 'popularity', label: 'Popularity' },
+  { value: 'rating',     label: 'Top Rated' },
+  { value: 'recent',     label: 'Recent' },
+]
+
 export const mangaApi = {
-  list: (params?: { search?: string; genre?: string; page?: number; limit?: number }) =>
-    apiClient.get<{ data: MangaListResponse }>('/manga', { params }),
+  list: (params?: {
+    search?: string
+    genre?: string
+    status?: string
+    sort_by?: string
+    min_rating?: number
+    page?: number
+    limit?: number
+  }) =>
+    apiClient.get<{ data: MangaSearchResponse }>('/manga', { params }),
 
   get: (id: string) =>
     apiClient.get<{ data: Manga }>(`/manga/${id}`),
 
-  search: (filters: SearchFilters) =>
-    apiClient.post<{ data: Manga[]; total: number }>('/manga/search', filters),
+  advancedSearch: (filters: SearchFilters) =>
+    apiClient.post<{ data: { manga: Manga[]; total: number } }>('/manga/search', filters),
 
   recommendations: (limit = 10) =>
     apiClient.get<{ data: { recommendations: Manga[] } }>('/users/recommendations', {

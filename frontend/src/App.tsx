@@ -9,6 +9,7 @@ import LibraryPage from '@/pages/LibraryPage'
 import ChatPage from '@/pages/ChatPage'
 import FeedPage from '@/pages/FeedPage'
 import ProfilePage from '@/pages/ProfilePage'
+import ChangePasswordPage from '@/pages/ChangePasswordPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/chat/:room" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
             <Route path="/feed" element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
