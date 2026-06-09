@@ -29,6 +29,7 @@ import (
 	"mangahub/pkg/models"
 	"mangahub/pkg/utils"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -233,6 +234,29 @@ func main() {
 
 	// --- Routes ---
 	r := server.Router
+
+	// CORS — comma-separated list, e.g. "http://localhost:5173,http://localhost:3000"
+	corsOrigins := os.Getenv("FRONTEND_ORIGINS")
+	var allowedOrigins []string
+	if corsOrigins != "" {
+		for _, o := range strings.Split(corsOrigins, ",") {
+			if trimmed := strings.TrimSpace(o); trimmed != "" {
+				allowedOrigins = append(allowedOrigins, trimmed)
+			}
+		}
+	}
+	if len(allowedOrigins) == 0 {
+		// Default: both Vite dev server and Docker frontend port
+		allowedOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
+	}
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     allowedOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Authorization", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// ============================================================
 	// HEALTH CHECK ENDPOINTS — All Services

@@ -1,0 +1,152 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+/* shadcn dark mode uses .dark class on <html> */
+@custom-variant dark (&:is(.dark *));
+
+/* ── MangaHub Tailwind theme bridge ────────────────────────────── */
+@theme inline {
+  --font-sans:    'Geist Variable', 'Inter', system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --color-background:         var(--background);
+  --color-foreground:         var(--foreground);
+  --color-card:               var(--card);
+  --color-card-foreground:    var(--card-foreground);
+  --color-popover:            var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary:            var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary:          var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:              var(--muted);
+  --color-muted-foreground:   var(--muted-foreground);
+  --color-accent:             var(--accent);
+  --color-accent-foreground:  var(--accent-foreground);
+  --color-destructive:        var(--destructive);
+  --color-border:             var(--border);
+  --color-input:              var(--input);
+  --color-ring:               var(--ring);
+
+  --radius-sm:  calc(var(--radius) * 0.6);
+  --radius-md:  calc(var(--radius) * 0.8);
+  --radius-lg:  var(--radius);
+  --radius-xl:  calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+/* ── Light theme (default) ─────────────────────────────────────── */
+:root {
+  /* MangaHub brand palette */
+  --brand-red:         #e63946;
+  --brand-red-hover:   #cc2f3c;
+  --brand-teal:        #4ecdc4;
+  --brand-teal-hover:  #3bbdb4;
+
+  /* Surface palette */
+  --color-bg:          #f8f8fc;
+  --color-surface:     #ffffff;
+  --color-surface2:    #f0f0f7;
+  --color-border-raw:  #e2e2ee;
+  --color-text:        #111118;
+  --color-text2:       #444455;
+  --color-muted-raw:   #888899;
+
+  /* shadcn tokens → MangaHub brand */
+  --background:          oklch(0.975 0.003 270);
+  --foreground:          oklch(0.12 0.015 270);
+  --card:                oklch(1 0 0);
+  --card-foreground:     oklch(0.12 0.015 270);
+  --popover:             oklch(1 0 0);
+  --popover-foreground:  oklch(0.12 0.015 270);
+  --primary:             oklch(0.55 0.22 20);   /* red #e63946 */
+  --primary-foreground:  oklch(1 0 0);
+  --secondary:           oklch(0.94 0.005 270);
+  --secondary-foreground: oklch(0.3 0.01 270);
+  --muted:               oklch(0.94 0.005 270);
+  --muted-foreground:    oklch(0.55 0.01 270);
+  --accent:              oklch(0.74 0.1 185);   /* teal #4ecdc4 */
+  --accent-foreground:   oklch(1 0 0);
+  --destructive:         oklch(0.55 0.22 20);
+  --border:              oklch(0.9 0.007 270);
+  --input:               oklch(0.9 0.007 270);
+  --ring:                oklch(0.55 0.22 20);
+  --radius:              0.625rem;
+
+  /* Semantic status */
+  --color-success:  #22c55e;
+  --color-warning:  #f59e0b;
+  --color-error:    #ef4444;
+  --color-info:     #3b82f6;
+}
+
+/* ── Dark theme (.dark on <html>) ──────────────────────────────── */
+.dark {
+  --color-bg:         #0d0d0f;
+  --color-surface:    #1a1a24;
+  --color-surface2:   #22222e;
+  --color-border-raw: #2e2e3e;
+  --color-text:       #f0f0f5;
+  --color-text2:      #c0c0cc;
+  --color-muted-raw:  #8a8a9a;
+
+  --background:         oklch(0.1 0.01 270);
+  --foreground:         oklch(0.95 0.005 270);
+  --card:               oklch(0.14 0.015 270);
+  --card-foreground:    oklch(0.95 0.005 270);
+  --popover:            oklch(0.14 0.015 270);
+  --popover-foreground: oklch(0.95 0.005 270);
+  --primary:            oklch(0.65 0.22 20);
+  --primary-foreground: oklch(1 0 0);
+  --secondary:          oklch(0.18 0.015 270);
+  --secondary-foreground: oklch(0.8 0.01 270);
+  --muted:              oklch(0.18 0.015 270);
+  --muted-foreground:   oklch(0.58 0.01 270);
+  --accent:             oklch(0.74 0.1 185);
+  --accent-foreground:  oklch(1 0 0);
+  --destructive:        oklch(0.65 0.22 22);
+  --border:             oklch(0.22 0.015 270);
+  --input:              oklch(0.22 0.015 270);
+  --ring:               oklch(0.65 0.22 20);
+}
+
+/* ── Base resets ───────────────────────────────────────────────── */
+@layer base {
+  * {
+    box-sizing: border-box;
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    font-size: 16px;
+    @apply font-sans;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-background text-foreground;
+  }
+
+  #root {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Thin scrollbar */
+  ::-webkit-scrollbar       { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-raw);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-muted-raw); }
+}

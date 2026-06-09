@@ -1,12 +1,26 @@
 services:
-  # --- Redis Cache ---
+
+  # ── Frontend (React + Nginx) ─────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: "http://localhost:8080"
+    ports:
+      - "3000:80"
+    depends_on:
+      - mangahub-api
+    restart: unless-stopped
+
+  # ── Redis Cache ──────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: "redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --save 300 100 --save 60 1000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -14,12 +28,12 @@ services:
       timeout: 5s
       retries: 3
 
-  # --- MangaHub API Server ---
+  # ── API Server (HTTP + WebSocket) ────────────────────────────────
   mangahub-api:
     build: .
     command: api-server
     ports:
-      - "8080:8080" # HTTP API & WebSocket
+      - "8080:8080"
     volumes:
       - mangahub-data:/app/data
     environment:
@@ -46,7 +60,7 @@ services:
       mangahub-grpc:
         condition: service_started
 
-  # --- TCP Progress Sync Server ---
+  # ── TCP Progress Sync ────────────────────────────────────────────
   mangahub-tcp:
     build: .
     command: tcp-server
@@ -59,7 +73,7 @@ services:
       - DB_PATH=/app/data/mangahub.db
     restart: unless-stopped
 
-  # --- UDP Notification Server ---
+  # ── UDP Notifications ────────────────────────────────────────────
   mangahub-udp:
     build: .
     command: udp-server
@@ -72,7 +86,7 @@ services:
       - DB_PATH=/app/data/mangahub.db
     restart: unless-stopped
 
-  # --- gRPC Internal Service ---
+  # ── gRPC Service ─────────────────────────────────────────────────
   mangahub-grpc:
     build: .
     command: grpc-server
