@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, BookOpen, Star, ThumbsUp, BookMarked,
-  Trash2, CheckCircle2, MessageSquare, Plus,
+  Trash2, CheckCircle2, MessageSquare, Plus, ChevronDown,
 } from 'lucide-react'
 import { mangaApi } from '@/api/manga'
 import { libraryApi, LIBRARY_STATUSES, type LibraryStatus } from '@/api/library'
@@ -65,18 +65,19 @@ function StarPicker({ value, onChange }: { value: number; onChange: (n: number) 
 
 // ── Library action ─────────────────────────────────────────────────
 
-function LibraryAction({ mangaId }: { mangaId: string }) {
+function LibraryAction({ mangaId, totalChapters }: { mangaId: string; totalChapters: number }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const qc = useQueryClient()
   const [selectedStatus, setSelectedStatus] = useState<LibraryStatus>('reading')
 
+  // Same queryFn shape as LibraryPage so they share the cache cleanly
   const { data: libData } = useQuery({
     queryKey: ['library'],
-    queryFn: () => libraryApi.get(),
+    queryFn: () => libraryApi.get().then((r) => r.data.data),
     enabled: isAuthenticated,
   })
 
-  const lists = libData?.data?.data?.reading_lists
+  const lists = libData?.reading_lists
   const allEntries = [
     ...(lists?.reading ?? []),
     ...(lists?.completed ?? []),
@@ -84,8 +85,26 @@ function LibraryAction({ mangaId }: { mangaId: string }) {
   ]
   const entry = allEntries.find((e) => e.manga_id === mangaId)
 
+  // When adding as "completed", set chapter to total immediately after
   const addMutation = useMutation({
-    mutationFn: (status: LibraryStatus) => libraryApi.add(mangaId, status),
+    mutationFn: async (status: LibraryStatus) => {
+      await libraryApi.add(mangaId, status)
+      if (status === 'completed' && totalChapters > 0) {
+        await libraryApi.updateProgress(mangaId, totalChapters, 'completed')
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['library'] }),
+  })
+
+  // When changing status on an existing entry, also update chapter if completing
+  const updateStatusMutation = useMutation({
+    mutationFn: (status: LibraryStatus) => {
+      const chapter =
+        status === 'completed' && totalChapters > 0
+          ? totalChapters
+          : (entry?.current_chapter ?? 0)
+      return libraryApi.updateProgress(mangaId, chapter, status)
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['library'] }),
   })
 
@@ -108,25 +127,29 @@ function LibraryAction({ mangaId }: { mangaId: string }) {
 
   if (entry) {
     const statusLabel = LIBRARY_STATUSES.find((s) => s.value === entry.status)?.label ?? entry.status
+    const isBusy = updateStatusMutation.isPending || removeMutation.isPending
     return (
       <div className="flex flex-wrap items-center gap-3">
         <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-teal)]/15 px-3 py-1.5 text-sm font-medium text-[var(--brand-teal)]">
           <BookMarked className="h-3.5 w-3.5" />
           {statusLabel}
         </span>
-        <select
-          value={entry.status}
-          onChange={(e) => addMutation.mutate(e.target.value as LibraryStatus)}
-          disabled={addMutation.isPending}
-          className="rounded-lg border border-[var(--color-border-raw)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-red)]/40 disabled:opacity-50"
-        >
-          {LIBRARY_STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={entry.status}
+            onChange={(e) => updateStatusMutation.mutate(e.target.value as LibraryStatus)}
+            disabled={isBusy}
+            className="appearance-none rounded-lg border border-[var(--color-border-raw)] bg-[var(--color-surface)] pl-3 pr-8 py-1.5 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-red)]/40 disabled:opacity-50"
+          >
+            {LIBRARY_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-muted-raw)]" />
+        </div>
         <button
           onClick={() => removeMutation.mutate()}
-          disabled={removeMutation.isPending}
+          disabled={isBusy}
           className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-500 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/40 dark:hover:bg-red-900/20"
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -138,15 +161,18 @@ function LibraryAction({ mangaId }: { mangaId: string }) {
 
   return (
     <div className="flex items-center gap-2">
-      <select
-        value={selectedStatus}
-        onChange={(e) => setSelectedStatus(e.target.value as LibraryStatus)}
-        className="rounded-lg border border-[var(--color-border-raw)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-red)]/40"
-      >
-        {LIBRARY_STATUSES.map((s) => (
-          <option key={s.value} value={s.value}>{s.label}</option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          value={selectedStatus}
+          onChange={(e) => setSelectedStatus(e.target.value as LibraryStatus)}
+          className="appearance-none rounded-lg border border-[var(--color-border-raw)] bg-[var(--color-surface)] pl-3 pr-8 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-red)]/40"
+        >
+          {LIBRARY_STATUSES.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-muted-raw)]" />
+      </div>
       <button
         onClick={() => addMutation.mutate(selectedStatus)}
         disabled={addMutation.isPending}
@@ -441,9 +467,9 @@ export default function MangaDetailPage() {
   const userId = useAuthStore((s) => s.userId)
   const [showReviewForm, setShowReviewForm] = useState(false)
 
-  const { data: mangaResp, isLoading, isError } = useQuery({
+  const { data: manga, isLoading, isError } = useQuery({
     queryKey: ['manga', id],
-    queryFn: () => mangaApi.get(id!),
+    queryFn: () => mangaApi.get(id!).then((r) => r.data.data),
     enabled: !!id,
   })
 
@@ -452,8 +478,6 @@ export default function MangaDetailPage() {
     queryFn: () => reviewApi.list(id!),
     enabled: !!id,
   })
-
-  const manga = mangaResp?.data?.data
   const reviews: Review[] = reviewsResp?.data?.data?.reviews ?? []
   const userReview = reviews.find((r) => r.user_id === userId)
   const avgRating =
@@ -565,7 +589,7 @@ export default function MangaDetailPage() {
 
           {/* Library action */}
           <div className="pt-1">
-            <LibraryAction mangaId={id!} />
+            <LibraryAction mangaId={id!} totalChapters={manga.total_chapters ?? 0} />
           </div>
         </div>
       </div>

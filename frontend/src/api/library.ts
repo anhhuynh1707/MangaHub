@@ -31,4 +31,7 @@ export const libraryApi = {
 
   remove: (manga_id: string) =>
     apiClient.delete(`/users/library/${manga_id}`),
+
+  updateProgress: (manga_id: string, current_chapter: number, status: LibraryStatus) =>
+    apiClient.put('/users/progress', { manga_id, current_chapter, status }),
 }
