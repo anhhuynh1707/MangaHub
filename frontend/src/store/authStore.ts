@@ -24,6 +24,14 @@ export const useAuthStore = create<AuthState>()(
       clearAuth: () =>
         set({ token: null, userId: null, username: null, isAuthenticated: false }),
     }),
-    { name: 'mangahub-auth' }
+    {
+      name: 'mangahub-auth',
+      onRehydrateStorage: () => (state) => {
+        // Clear sessions saved before the login fix (missing userId or username)
+        if (state?.isAuthenticated && (!state.userId || !state.username)) {
+          state.clearAuth()
+        }
+      },
+    }
   )
 )

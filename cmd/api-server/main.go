@@ -773,21 +773,31 @@ func main() {
 	dataRoutes.Use(auth.AuthMiddleware())
 	{
 		dataRoutes.POST("/seed", func(c *gin.Context) {
-			seedManga := data.GetSeedManga()
-			inserted, _ := mangaService.BulkCreate(seedManga)
-			utils.SuccessResponse(c, fmt.Sprintf("Seeded %d manga", inserted), gin.H{
-				"imported": inserted, "total": len(seedManga),
+			imported, err := mangaPkg.ImportFromMangaDex(mangaService, mangaDexClient, 100)
+			if err != nil {
+				utils.InternalServerErrorResponse(c, "Failed to fetch from MangaDex: "+err.Error())
+				return
+			}
+			utils.SuccessResponse(c, fmt.Sprintf("Seeded %d manga from MangaDex", imported), gin.H{
+				"imported": imported,
 			})
 		})
 
 		dataRoutes.POST("/fetch-mangadex", func(c *gin.Context) {
-			imported, err := mangaPkg.ImportFromMangaDex(mangaService, mangaDexClient, 100)
+			count := 100
+			if v := c.Query("count"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 500 {
+					count = n
+				}
+			}
+			imported, err := mangaPkg.ImportFromMangaDex(mangaService, mangaDexClient, count)
 			if err != nil {
 				utils.InternalServerErrorResponse(c, "Failed to fetch from MangaDex: "+err.Error())
 				return
 			}
 			utils.SuccessResponse(c, fmt.Sprintf("Imported %d manga from MangaDex", imported), gin.H{
 				"imported": imported,
+				"requested": count,
 			})
 		})
 
@@ -1146,7 +1156,8 @@ func main() {
 	}
 }
 
-// seedDatabase seeds the database with initial manga data if empty.
+// seedDatabase populates the database from MangaDex API on first run.
+// data/seed.go is kept for reference but is never called.
 func seedDatabase(mangaService *mangaPkg.Service, mangaDexClient *mangaPkg.MangaDexClient) {
 	count, err := mangaService.GetCount()
 	if err != nil {
@@ -1158,27 +1169,12 @@ func seedDatabase(mangaService *mangaPkg.Service, mangaDexClient *mangaPkg.Manga
 		return
 	}
 
-	if count < 100 {
-		log.Println("Seeding database with initial manga data...")
-		seedManga := data.GetSeedManga()
-		inserted, err := mangaService.BulkCreate(seedManga)
-		if err != nil {
-			log.Printf("Warning: failed to seed database: %v", err)
-		} else {
-			log.Printf("✅ Successfully seeded %d manga series from static data", inserted)
-		}
-	}
-
-	// Fetch from MangaDex if we still have < 200
-	count, _ = mangaService.GetCount()
-	if count < 200 {
-		log.Println("Fetching additional manga from MangaDex API...")
-		imported, err := mangaPkg.ImportFromMangaDex(mangaService, mangaDexClient, 100)
-		if err != nil {
-			log.Printf("Warning: failed to import from MangaDex: %v", err)
-		} else {
-			log.Printf("✅ Successfully imported %d manga from MangaDex API", imported)
-		}
+	log.Println("Fetching manga from MangaDex API...")
+	imported, err := mangaPkg.ImportFromMangaDex(mangaService, mangaDexClient, 200)
+	if err != nil {
+		log.Printf("Warning: failed to import from MangaDex: %v", err)
+	} else {
+		log.Printf("✅ Successfully imported %d manga from MangaDex API", imported)
 	}
 }
 

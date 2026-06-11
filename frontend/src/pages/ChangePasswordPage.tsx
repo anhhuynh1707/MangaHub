@@ -94,7 +94,7 @@ export default function ChangePasswordPage() {
                 onChange={setOldPassword}
                 show={showOld}
                 onToggle={() => setShowOld((v) => !v)}
-                placeholder="your current password"
+                placeholder="Your current password"
                 autoComplete="current-password"
               />
             </Field>
@@ -107,7 +107,7 @@ export default function ChangePasswordPage() {
                 onChange={setNewPassword}
                 show={showNew}
                 onToggle={() => setShowNew((v) => !v)}
-                placeholder="at least 6 characters"
+                placeholder="At least 6 characters"
                 autoComplete="new-password"
               />
             </Field>
@@ -118,7 +118,7 @@ export default function ChangePasswordPage() {
                 onChange={setConfirm}
                 show={showNew}
                 onToggle={() => setShowNew((v) => !v)}
-                placeholder="repeat new password"
+                placeholder="Repeat new password"
                 autoComplete="new-password"
               />
               {/* Live match indicator */}

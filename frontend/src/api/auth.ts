@@ -2,7 +2,8 @@ import { apiClient } from './client'
 
 export interface LoginPayload    { username: string; password: string }
 export interface RegisterPayload { username: string; password: string; email?: string }
-export interface AuthResponse    { token: string; user_id: string; username: string }
+export interface AuthUser        { id: string; username: string }
+export interface AuthResponse    { token: string; user: AuthUser }
 export interface ChangePasswordPayload { old_password: string; new_password: string }
 
 export const authApi = {

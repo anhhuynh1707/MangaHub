@@ -49,10 +49,11 @@ func (r *Repository) CreateReview(userID, mangaID string, rating int, text strin
 func (r *Repository) GetReviewByID(reviewID string) (*models.Review, error) {
 	var review models.Review
 	err := r.db.QueryRow(
-		`SELECT id, user_id, manga_id, rating, text, helpful, created_at, updated_at
-		 FROM reviews WHERE id = ?`,
+		`SELECT r.id, r.user_id, COALESCE(u.username,''), r.manga_id, r.rating, r.text, r.helpful, r.created_at, r.updated_at
+		 FROM reviews r LEFT JOIN users u ON r.user_id = u.id
+		 WHERE r.id = ?`,
 		reviewID,
-	).Scan(&review.ID, &review.UserID, &review.MangaID, &review.Rating, &review.Text,
+	).Scan(&review.ID, &review.UserID, &review.Username, &review.MangaID, &review.Rating, &review.Text,
 		&review.Helpful, &review.CreatedAt, &review.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -69,10 +70,11 @@ func (r *Repository) GetReviewByID(reviewID string) (*models.Review, error) {
 func (r *Repository) GetReviewByUserAndManga(userID, mangaID string) (*models.Review, error) {
 	var review models.Review
 	err := r.db.QueryRow(
-		`SELECT id, user_id, manga_id, rating, text, helpful, created_at, updated_at
-		 FROM reviews WHERE user_id = ? AND manga_id = ?`,
+		`SELECT r.id, r.user_id, COALESCE(u.username,''), r.manga_id, r.rating, r.text, r.helpful, r.created_at, r.updated_at
+		 FROM reviews r LEFT JOIN users u ON r.user_id = u.id
+		 WHERE r.user_id = ? AND r.manga_id = ?`,
 		userID, mangaID,
-	).Scan(&review.ID, &review.UserID, &review.MangaID, &review.Rating, &review.Text,
+	).Scan(&review.ID, &review.UserID, &review.Username, &review.MangaID, &review.Rating, &review.Text,
 		&review.Helpful, &review.CreatedAt, &review.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -96,9 +98,10 @@ func (r *Repository) GetReviewsByManga(mangaID string, limit, offset int) ([]mod
 
 	// Get paginated results
 	rows, err := r.db.Query(
-		`SELECT id, user_id, manga_id, rating, text, helpful, created_at, updated_at
-		 FROM reviews WHERE manga_id = ?
-		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT r.id, r.user_id, COALESCE(u.username,''), r.manga_id, r.rating, r.text, r.helpful, r.created_at, r.updated_at
+		 FROM reviews r LEFT JOIN users u ON r.user_id = u.id
+		 WHERE r.manga_id = ?
+		 ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
 		mangaID, limit, offset,
 	)
 	if err != nil {
@@ -109,7 +112,7 @@ func (r *Repository) GetReviewsByManga(mangaID string, limit, offset int) ([]mod
 	var reviews []models.Review
 	for rows.Next() {
 		var review models.Review
-		err := rows.Scan(&review.ID, &review.UserID, &review.MangaID, &review.Rating, &review.Text,
+		err := rows.Scan(&review.ID, &review.UserID, &review.Username, &review.MangaID, &review.Rating, &review.Text,
 			&review.Helpful, &review.CreatedAt, &review.UpdatedAt)
 		if err != nil {
 			log.Printf("Error scanning review: %v", err)
@@ -132,9 +135,10 @@ func (r *Repository) GetReviewsByUser(userID string, limit, offset int) ([]model
 
 	// Get paginated results
 	rows, err := r.db.Query(
-		`SELECT id, user_id, manga_id, rating, text, helpful, created_at, updated_at
-		 FROM reviews WHERE user_id = ?
-		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT r.id, r.user_id, COALESCE(u.username,''), r.manga_id, r.rating, r.text, r.helpful, r.created_at, r.updated_at
+		 FROM reviews r LEFT JOIN users u ON r.user_id = u.id
+		 WHERE r.user_id = ?
+		 ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
 		userID, limit, offset,
 	)
 	if err != nil {
@@ -145,7 +149,7 @@ func (r *Repository) GetReviewsByUser(userID string, limit, offset int) ([]model
 	var reviews []models.Review
 	for rows.Next() {
 		var review models.Review
-		err := rows.Scan(&review.ID, &review.UserID, &review.MangaID, &review.Rating, &review.Text,
+		err := rows.Scan(&review.ID, &review.UserID, &review.Username, &review.MangaID, &review.Rating, &review.Text,
 			&review.Helpful, &review.CreatedAt, &review.UpdatedAt)
 		if err != nil {
 			log.Printf("Error scanning review: %v", err)

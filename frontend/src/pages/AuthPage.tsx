@@ -124,8 +124,8 @@ function LoginForm({ onSuccess }: { onSuccess: () => void }) {
     setLoading(true)
     try {
       const res = await authApi.login({ username: username.trim(), password })
-      const { token, user_id, username: uname } = res.data.data
-      setAuth(token, user_id, uname)
+      const { token, user } = res.data.data
+      setAuth(token, user.id, user.username)
       onSuccess()
     } catch (err: unknown) {
       const msg = extractError(err)
@@ -200,8 +200,8 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
     setLoading(true)
     try {
       const res = await authApi.register({ username: username.trim(), password })
-      const { token, user_id, username: uname } = res.data.data
-      setAuth(token, user_id, uname)
+      const { token, user } = res.data.data
+      setAuth(token, user.id, user.username)
       onSuccess()
     } catch (err: unknown) {
       setError(extractError(err) || 'Registration failed. Username may already be taken.')
