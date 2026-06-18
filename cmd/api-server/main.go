@@ -121,8 +121,12 @@ func main() {
 	// --- MangaDex Client ---
 	mangaDexClient := mangaPkg.NewMangaDexClient()
 
-	// --- Seed data on first run ---
-	seedDatabase(mangaService, mangaDexClient)
+	// --- Seed data on first run (background) ---
+	// Seeding imports ~200 manga from MangaDex on a fresh DB, which can take
+	// many seconds. Run it in the background so the HTTP server starts listening
+	// immediately — otherwise early login/register requests fail because the API
+	// isn't accepting connections yet while the frontend is already up.
+	go seedDatabase(mangaService, mangaDexClient)
 
 	// --- Handlers ---
 	userHandler := userPkg.NewHandler(userService)

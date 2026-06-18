@@ -23,7 +23,11 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		}
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?_foreign_keys=on")
+	// WAL mode + a busy timeout let readers and writers coexist without
+	// "database is locked" errors — important now that the first-run seed
+	// runs concurrently with live login/register traffic.
+	dsn := dbPath + "?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000"
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

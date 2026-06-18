@@ -98,6 +98,9 @@ func (h *ChatHub) Run() {
 			}
 			h.mu.RUnlock()
 
+			// Broadcast the authoritative (deduped) online-user list to the room
+			h.broadcastUserList(client.Room)
+
 			// Send recent history to the newly joined client for their room
 			h.mu.RLock()
 			roomHistory := h.History[client.Room]
@@ -148,6 +151,9 @@ func (h *ChatHub) Run() {
 			}
 			h.mu.RUnlock()
 
+			// Broadcast the updated (deduped) online-user list to the room
+			h.broadcastUserList(client.Room)
+
 		case msg := <-h.Broadcast:
 			// Store in history (for regular messages only)
 			if msg.Type == "message" {
@@ -196,13 +202,42 @@ func (h *ChatHub) GetOnlineUsers(room string) []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
+	// Dedupe by username — a user may hold several connections (tabs, reconnects)
+	// but should appear only once in the online list.
+	seen := make(map[string]bool)
 	users := make([]string, 0)
 	for c := range h.Clients {
-		if c.Room == room {
+		if c.Room == room && !seen[c.Username] {
+			seen[c.Username] = true
 			users = append(users, c.Username)
 		}
 	}
 	return users
+}
+
+// broadcastUserList sends the current deduped online-user list to every client
+// in the room as a "users" message, giving clients an authoritative presence
+// snapshot on each join/leave (robust against multiple connections per user).
+func (h *ChatHub) broadcastUserList(room string) {
+	users := h.GetOnlineUsers(room) // locks internally; call before taking RLock below
+
+	msg := ChatMessage{
+		Type:      "users",
+		Room:      room,
+		Users:     users,
+		Timestamp: time.Now().Unix(),
+	}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.Clients {
+		if c.Room == room {
+			select {
+			case c.Send <- msg:
+			default:
+			}
+		}
+	}
 }
 
 // SendToClient sends a message to a specific client via its channel.

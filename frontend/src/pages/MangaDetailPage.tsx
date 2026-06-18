@@ -9,6 +9,7 @@ import {
 import { mangaApi } from '@/api/manga'
 import { libraryApi, LIBRARY_STATUSES, type LibraryStatus } from '@/api/library'
 import { reviewApi, type Review } from '@/api/review'
+import { mangaRoomId } from '@/api/chat'
 import { useAuthStore } from '@/store/authStore'
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -587,9 +588,16 @@ export default function MangaDetailPage() {
             </p>
           )}
 
-          {/* Library action */}
-          <div className="pt-1">
+          {/* Library action + discuss */}
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             <LibraryAction mangaId={id!} totalChapters={manga.total_chapters ?? 0} />
+            <Link
+              to={`/chat/${mangaRoomId(id!)}`}
+              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border-raw)] px-4 py-2 text-sm font-medium text-[var(--color-text2)] transition-colors hover:border-[var(--brand-teal)] hover:text-[var(--brand-teal)]"
+            >
+              <MessageSquare className="h-4 w-4" />
+              Discuss
+            </Link>
           </div>
         </div>
       </div>

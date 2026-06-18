@@ -204,7 +204,7 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
       setAuth(token, user.id, user.username)
       onSuccess()
     } catch (err: unknown) {
-      setError(extractError(err) || 'Registration failed. Username may already be taken.')
+      setError(extractError(err) || 'Registration failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -305,9 +305,19 @@ function ErrorBanner({ message }: { message: string }) {
 }
 
 function extractError(err: unknown): string {
-  if (err && typeof err === 'object' && 'response' in err) {
-    const r = (err as { response?: { data?: { error?: string; message?: string } } }).response
-    return r?.data?.error ?? r?.data?.message ?? ''
+  if (err && typeof err === 'object') {
+    const e = err as {
+      response?: { data?: { error?: string; message?: string }; status?: number }
+      code?: string
+    }
+    // The server responded — surface its real error/message
+    const fromBody = e.response?.data?.error ?? e.response?.data?.message
+    if (fromBody) return fromBody
+    if (e.response?.status) return `Server error (${e.response.status})`
+    // No response at all → network-level failure (server unreachable / timeout)
+    if (e.code === 'ERR_NETWORK' || e.code === 'ECONNABORTED') {
+      return 'Cannot reach the server. Make sure the API is running.'
+    }
   }
   return ''
 }

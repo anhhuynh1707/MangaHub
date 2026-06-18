@@ -35,4 +35,10 @@ export const reviewApi = {
 
   markHelpful: (review_id: string) =>
     apiClient.post(`/reviews/${review_id}/helpful`, { review_id }),
+
+  myReviews: (page = 1, limit = 50) =>
+    apiClient.get<{ data: { reviews: Review[]; total: number; page: number; limit: number; pages: number } }>(
+      '/users/reviews',
+      { params: { page, limit } }
+    ),
 }
