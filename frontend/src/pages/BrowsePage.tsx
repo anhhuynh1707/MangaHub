@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, X, SlidersHorizontal, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, X, SlidersHorizontal, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { mangaApi, GENRES, SORT_OPTIONS } from '@/api/manga'
 import { MangaGrid } from '@/components/manga/MangaGrid'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -121,26 +121,32 @@ export default function BrowsePage() {
 
         {/* Status + Sort row */}
         <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={status}
-            onChange={(e) => { setStatus(e.target.value); setPage(1) }}
-            className={selectCls}
-          >
-            <option value="">All Status</option>
-            <option value="ongoing">Ongoing</option>
-            <option value="completed">Completed</option>
-            <option value="hiatus">Hiatus</option>
-          </select>
+          <div className="relative">
+            <select
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setPage(1) }}
+              className={selectCls}
+            >
+              <option value="">All Status</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+              <option value="hiatus">Hiatus</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-raw)]" />
+          </div>
 
-          <select
-            value={sortBy}
-            onChange={(e) => { setSortBy(e.target.value); setPage(1) }}
-            className={selectCls}
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={sortBy}
+              onChange={(e) => { setSortBy(e.target.value); setPage(1) }}
+              className={selectCls}
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted-raw)]" />
+          </div>
 
           {hasActiveFilters && (
             <button
@@ -203,7 +209,7 @@ function chipCls(active: boolean) {
 }
 
 const selectCls =
-  'rounded-lg border border-[var(--color-border-raw)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--brand-red)] cursor-pointer'
+  'appearance-none rounded-lg border border-[var(--color-border-raw)] bg-[var(--color-surface)] pl-3 pr-8 py-2 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--brand-red)] cursor-pointer'
 
 const paginationBtnCls =
   'flex items-center gap-1.5 rounded-lg border border-[var(--color-border-raw)] px-4 py-2 text-sm font-medium text-[var(--color-text2)] transition hover:bg-[var(--color-surface2)] disabled:opacity-40 disabled:cursor-not-allowed'

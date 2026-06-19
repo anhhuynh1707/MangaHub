@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { authApi } from '@/api/auth'
@@ -20,12 +20,12 @@ export default function AuthPage() {
     <div className="min-h-screen bg-[var(--color-bg)] flex flex-col">
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2 font-bold text-[var(--color-text)]">
+        <Link to="/" className="flex items-center gap-2 font-bold text-[var(--color-text)] no-underline transition-opacity hover:opacity-80">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--brand-red)] text-white">
             <BookOpen className="h-4 w-4" />
           </div>
           <span>Manga<span className="text-[var(--brand-red)]"> Hub</span></span>
-        </div>
+        </Link>
         <ThemeToggle />
       </div>
 

@@ -93,6 +93,8 @@ func createSchema(db *sql.DB) error {
 		UNIQUE(user_id, manga_id)
 	);
 
+	-- Friend requests are directional: user_id is the requester, friend_id is
+	-- the recipient. (No canonical ordering — that would lose who sent it.)
 	CREATE TABLE IF NOT EXISTS friendships (
 		user_id    TEXT NOT NULL,
 		friend_id  TEXT NOT NULL,
@@ -100,8 +102,7 @@ func createSchema(db *sql.DB) error {
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (user_id, friend_id),
 		FOREIGN KEY (user_id) REFERENCES users(id),
-		FOREIGN KEY (friend_id) REFERENCES users(id),
-		CHECK (user_id < friend_id)
+		FOREIGN KEY (friend_id) REFERENCES users(id)
 	);
 
 	CREATE TABLE IF NOT EXISTS shared_reading_lists (

@@ -14,8 +14,8 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`flex flex-col gap-1 border-r border-[var(--color-border-raw)] bg-[var(--color-surface)] p-2 transition-all duration-300 ${
-        sidebarOpen ? 'w-52' : 'w-0 overflow-hidden p-0'
+      className={`flex flex-shrink-0 flex-col gap-1 border-r border-[var(--color-border-raw)] bg-[var(--color-surface)] p-2 transition-all duration-300 ${
+        sidebarOpen ? 'w-52' : 'w-14'
       }`}
     >
       {navItems.map(({ to, icon: Icon, label }) => (
@@ -23,8 +23,11 @@ export function Sidebar() {
           key={to}
           to={to}
           end={to === '/'}
+          title={sidebarOpen ? undefined : label}
           className={({ isActive }) =>
-            `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium no-underline transition-colors ${
+            `flex items-center rounded-lg py-2 text-sm font-medium no-underline transition-colors ${
+              sidebarOpen ? 'gap-2.5 px-3' : 'justify-center px-0'
+            } ${
               isActive
                 ? 'bg-[var(--brand-red)]/10 text-[var(--brand-red)]'
                 : 'text-[var(--color-text2)] hover:bg-[var(--color-surface2)] hover:text-[var(--color-text)]'
@@ -32,7 +35,7 @@ export function Sidebar() {
           }
         >
           <Icon className="h-4 w-4 flex-shrink-0" />
-          <span className="truncate">{label}</span>
+          {sidebarOpen && <span className="truncate">{label}</span>}
         </NavLink>
       ))}
     </aside>

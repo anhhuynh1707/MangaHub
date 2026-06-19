@@ -8,4 +8,7 @@ export interface UserProfile {
 
 export const userApi = {
   profile: () => apiClient.get<{ data: UserProfile }>('/users/profile'),
+
+  search: (q: string) =>
+    apiClient.get<{ data: UserProfile[] }>('/users/search', { params: { q } }),
 }

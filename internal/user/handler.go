@@ -1,7 +1,9 @@
 package user
 
 import (
+	"mangahub/internal/activity"
 	"mangahub/internal/auth"
+	"mangahub/internal/manga"
 	"mangahub/pkg/models"
 	"mangahub/pkg/utils"
 
@@ -10,12 +12,43 @@ import (
 
 // Handler handles HTTP requests for user operations.
 type Handler struct {
-	service *Service
+	service         *Service
+	activityService *activity.Service
+	mangaService    *manga.Service
 }
 
-// NewHandler creates a new user handler.
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+// NewHandler creates a new user handler. activityService and mangaService are
+// optional (may be nil) and used to log library activities to the feed.
+func NewHandler(service *Service, activityService *activity.Service, mangaService *manga.Service) *Handler {
+	return &Handler{service: service, activityService: activityService, mangaService: mangaService}
+}
+
+// logLibraryActivity logs a started/completed feed activity when a library
+// entry transitions into the "reading" or "completed" state. It is a no-op
+// when the status did not actually change (e.g. a plain chapter update), so
+// the feed isn't spammed on every progress tick.
+func (h *Handler) logLibraryActivity(c *gin.Context, userID, mangaID, oldStatus, newStatus string) {
+	if h.activityService == nil || oldStatus == newStatus {
+		return
+	}
+	username, ok := c.Get("username")
+	if !ok || username == nil {
+		return
+	}
+
+	title := mangaID
+	if h.mangaService != nil {
+		if m, err := h.mangaService.GetByID(mangaID); err == nil && m != nil {
+			title = m.Title
+		}
+	}
+
+	switch newStatus {
+	case "reading":
+		h.activityService.LogMangaStarted(userID, username.(string), mangaID, title)
+	case "completed":
+		h.activityService.LogMangaCompleted(userID, username.(string), mangaID, title)
+	}
 }
 
 // Register handles user registration.
@@ -47,7 +80,15 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	utils.CreatedResponse(c, "User registered successfully", user)
+	// Issue a token so the client is logged in immediately after registering.
+	// The response shape ({token, user}) matches the login response.
+	token, err := auth.GenerateToken(user.ID, user.Username)
+	if err != nil {
+		utils.InternalServerErrorResponse(c, "Failed to generate token")
+		return
+	}
+
+	utils.CreatedResponse(c, "User registered successfully", models.LoginResponse{Token: token, User: *user})
 }
 
 // Login handles user authentication.
@@ -105,6 +146,24 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	utils.SuccessResponse(c, "Profile retrieved", user)
 }
 
+// SearchUsers handles GET /users/search?q=<query> — username autocomplete for
+// finding friends. Excludes the requesting user from results.
+func (h *Handler) SearchUsers(c *gin.Context) {
+	userID, err := auth.GetUserIDFromContext(c)
+	if err != nil {
+		utils.UnauthorizedResponse(c, "Unable to identify user")
+		return
+	}
+
+	users, err := h.service.SearchUsers(c.Query("q"), userID)
+	if err != nil {
+		utils.InternalServerErrorResponse(c, "Search failed")
+		return
+	}
+
+	utils.SuccessResponse(c, "Users found", users)
+}
+
 // AddToLibrary adds a manga to the user's library.
 //
 // @Summary      Add manga to library
@@ -141,6 +200,9 @@ func (h *Handler) AddToLibrary(c *gin.Context) {
 		utils.InternalServerErrorResponse(c, "Failed to add to library: "+err.Error())
 		return
 	}
+
+	// New entry — log started/completed based on the status it was added with.
+	h.logLibraryActivity(c, userID, req.MangaID, "", entry.Status)
 
 	utils.CreatedResponse(c, "Manga added to library", entry)
 }
@@ -198,6 +260,12 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 		return
 	}
 
+	// Capture the previous status so we can detect a real transition below.
+	oldStatus := ""
+	if prev, _ := h.service.GetProgressEntry(userID, req.MangaID); prev != nil {
+		oldStatus = prev.Status
+	}
+
 	progress, err := h.service.UpdateProgress(userID, &req)
 	if err != nil {
 		if err.Error() == "manga not found in library" {
@@ -207,6 +275,10 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 		utils.InternalServerErrorResponse(c, "Failed to update progress")
 		return
 	}
+
+	// Log to the feed only when the status actually transitions (e.g. a user
+	// moves a manga to reading, or finishes it) — not on every chapter tick.
+	h.logLibraryActivity(c, userID, req.MangaID, oldStatus, progress.Status)
 
 	// Store in context for TCP broadcast integration
 	c.Set("progress_manga_id", req.MangaID)

@@ -129,7 +129,23 @@ func (s *Service) GetProfile(userID string) (*models.User, error) {
 	return user, nil
 }
 
+// SearchUsers returns users whose username matches the query (excluding the
+// caller). Returns an empty slice for blank queries.
+func (s *Service) SearchUsers(query, excludeID string) ([]models.User, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []models.User{}, nil
+	}
+	return s.repo.SearchByUsername(query, excludeID, 8)
+}
+
 // --- Library Service Methods ---
+
+// GetProgressEntry returns a single library entry (or nil if not present).
+// Used to detect status transitions for activity logging.
+func (s *Service) GetProgressEntry(userID, mangaID string) (*models.UserProgress, error) {
+	return s.repo.GetLibraryEntry(userID, mangaID)
+}
 
 // AddToLibrary adds a manga to the user's library.
 func (s *Service) AddToLibrary(userID string, req *models.AddToLibraryRequest) (*models.UserProgress, error) {

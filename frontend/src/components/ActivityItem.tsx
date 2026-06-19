@@ -23,7 +23,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-export function ActivityItem({ activity, showUser = true }: { activity: Activity; showUser?: boolean }) {
+export function ActivityItem({ activity }: { activity: Activity }) {
   const meta = TYPE_META[activity.type] ?? {
     icon: ActivityIcon,
     color: 'text-[var(--color-muted-raw)] bg-[var(--color-surface2)]',
@@ -42,28 +42,29 @@ export function ActivityItem({ activity, showUser = true }: { activity: Activity
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug text-[var(--color-text)]">
-          {showUser && <span className="font-semibold">{activity.username} </span>}
-          <span className="text-[var(--color-text2)]">{meta.verb} </span>
-          {activity.manga_title && (
-            activity.manga_id ? (
-              <Link
-                to={`/manga/${activity.manga_id}`}
-                className="font-medium text-[var(--brand-red)] hover:underline"
-              >
-                {activity.manga_title}
-              </Link>
-            ) : (
-              <span className="font-medium text-[var(--color-text)]">{activity.manga_title}</span>
-            )
-          )}
-        </p>
-        {/* Fall back to the server message when there's no manga title to render */}
-        {!activity.manga_title && activity.message && (
-          <p className="text-sm text-[var(--color-text2)]">{activity.message}</p>
-        )}
+        {/* The backend stores a self-contained message ("alice started reading X")
+            but not username/manga_title separately, so the message is the source
+            of truth. Link the whole line to the manga when we have its id. */}
+        <ActivityText
+          message={activity.message || meta.verb}
+          mangaId={activity.manga_id}
+        />
         <p className="mt-0.5 text-xs text-[var(--color-muted-raw)]">{timeAgo(activity.created_at)}</p>
       </div>
     </motion.div>
   )
+}
+
+function ActivityText({ message, mangaId }: { message: string; mangaId?: string }) {
+  if (mangaId) {
+    return (
+      <Link
+        to={`/manga/${mangaId}`}
+        className="text-sm leading-snug text-[var(--color-text)] hover:text-[var(--brand-red)]"
+      >
+        {message}
+      </Link>
+    )
+  }
+  return <p className="text-sm leading-snug text-[var(--color-text)]">{message}</p>
 }

@@ -129,7 +129,7 @@ func main() {
 	go seedDatabase(mangaService, mangaDexClient)
 
 	// --- Handlers ---
-	userHandler := userPkg.NewHandler(userService)
+	userHandler := userPkg.NewHandler(userService, activityService, mangaService)
 	mangaHandler := mangaPkg.NewHandler(mangaService)
 
 	// --- Social Feature Handlers ---
@@ -484,6 +484,7 @@ func main() {
 	users.Use(auth.AuthMiddleware())
 	{
 		users.GET("/profile", userHandler.GetProfile)
+		users.GET("/search", userHandler.SearchUsers)
 		users.POST("/library", userHandler.AddToLibrary)
 		users.GET("/library", userHandler.GetLibrary)
 		users.DELETE("/library/:manga_id", userHandler.RemoveFromLibrary)

@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Star, BookOpen, CheckCircle2, Clock, Activity as ActivityIcon, Calendar } from 'lucide-react'
+import { Star, BookOpen, CheckCircle2, Clock, Activity as ActivityIcon, Calendar, Users } from 'lucide-react'
 import { userApi } from '@/api/user'
 import { feedApi } from '@/api/feed'
 import { reviewApi } from '@/api/review'
 import { libraryApi } from '@/api/library'
+import { friendApi } from '@/api/friend'
 import { ActivityItem } from '@/components/ActivityItem'
+import { FriendsPanel } from '@/components/FriendsPanel'
 import { useAuthStore } from '@/store/authStore'
 
-type Tab = 'reviews' | 'activity'
+type Tab = 'reviews' | 'activity' | 'friends'
 
 export default function ProfilePage() {
   const userId = useAuthStore((s) => s.userId)
@@ -36,6 +38,19 @@ export default function ProfilePage() {
     queryFn: () => feedApi.userActivities(userId!).then((r) => r.data.data),
     enabled: !!userId,
   })
+
+  const { data: friendsData } = useQuery({
+    queryKey: ['friends'],
+    queryFn: () => friendApi.list().then((r) => r.data.data),
+  })
+
+  const { data: pendingData } = useQuery({
+    queryKey: ['friends-pending'],
+    queryFn: () => friendApi.pending().then((r) => r.data.data),
+  })
+
+  const friendCount = friendsData?.friends?.length ?? 0
+  const pendingCount = pendingData?.pending_requests?.length ?? 0
 
   const lists = library?.reading_lists
   const readingCount = lists?.reading?.length ?? 0
@@ -71,17 +86,25 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Stats ─────────────────────────────────────────────────── */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard icon={BookOpen}     label="In Library" value={libraryTotal}   color="text-[var(--brand-red)]" />
         <StatCard icon={Clock}        label="Reading"    value={readingCount}   color="text-blue-500" />
         <StatCard icon={CheckCircle2} label="Completed"  value={completedCount} color="text-emerald-500" />
         <StatCard icon={Star}         label="Reviews"    value={reviews.length} color="text-amber-500" />
+        <StatCard icon={Users}        label="Friends"    value={friendCount}    color="text-purple-500" />
       </div>
 
       {/* ── Tabs ──────────────────────────────────────────────────── */}
       <div className="mb-4 flex gap-1 rounded-xl border border-[var(--color-border-raw)] bg-[var(--color-surface)] p-1">
         <TabButton active={tab === 'reviews'} onClick={() => setTab('reviews')} icon={Star} label={`Reviews (${reviews.length})`} />
-        <TabButton active={tab === 'activity'} onClick={() => setTab('activity')} icon={ActivityIcon} label="My Activity" />
+        <TabButton active={tab === 'activity'} onClick={() => setTab('activity')} icon={ActivityIcon} label="Activity" />
+        <TabButton
+          active={tab === 'friends'}
+          onClick={() => setTab('friends')}
+          icon={Users}
+          label={`Friends (${friendCount})`}
+          badge={pendingCount}
+        />
       </div>
 
       {/* ── Content ───────────────────────────────────────────────── */}
@@ -108,14 +131,18 @@ export default function ProfilePage() {
             ))}
           </div>
         )
-      ) : activities.length === 0 ? (
-        <EmptyState text="No activity recorded yet." />
+      ) : tab === 'activity' ? (
+        activities.length === 0 ? (
+          <EmptyState text="No activity recorded yet." />
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {activities.map((a) => (
+              <ActivityItem key={a.id} activity={a} />
+            ))}
+          </div>
+        )
       ) : (
-        <div className="flex flex-col gap-2.5">
-          {activities.map((a) => (
-            <ActivityItem key={a.id} activity={a} showUser={false} />
-          ))}
-        </div>
+        <FriendsPanel />
       )}
     </div>
   )
@@ -147,23 +174,30 @@ function TabButton({
   onClick,
   icon: Icon,
   label,
+  badge = 0,
 }: {
   active: boolean
   onClick: () => void
   icon: React.ElementType
   label: string
+  badge?: number
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
+      className={`relative flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
         active
           ? 'bg-[var(--brand-red)] text-white'
           : 'text-[var(--color-muted-raw)] hover:text-[var(--color-text2)]'
       }`}
     >
       <Icon className="h-4 w-4" />
-      {label}
+      <span className="hidden sm:inline">{label}</span>
+      {badge > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+          {badge}
+        </span>
+      )}
     </button>
   )
 }

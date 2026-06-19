@@ -60,6 +60,32 @@ func (r *Repository) FindByID(id string) (*models.User, error) {
 	return &user, nil
 }
 
+// SearchByUsername returns users whose username contains the query substring
+// (case-insensitive), excluding excludeID. Used for friend autocomplete.
+func (r *Repository) SearchByUsername(query, excludeID string, limit int) ([]models.User, error) {
+	rows, err := r.db.Query(
+		`SELECT id, username, created_at FROM users
+		 WHERE username LIKE ? AND id != ?
+		 ORDER BY username
+		 LIMIT ?`,
+		"%"+query+"%", excludeID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]models.User, 0)
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.CreatedAt); err != nil {
+			continue
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
 // --- User Progress / Library Repository Methods ---
 
 // AddToLibrary adds a manga to the user's library.

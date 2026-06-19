@@ -17,41 +17,36 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// AddFriend sends a friend request or accepts a pending one.
-func (r *Repository) AddFriend(userID, friendID string) error {
-	// Ensure userID < friendID for consistent ordering
-	if userID > friendID {
-		userID, friendID = friendID, userID
-	}
-
-	// Check if friendship already exists
+// AddFriend sends a directional friend request: requesterID -> recipientID.
+// The request is stored with user_id = requester and friend_id = recipient so
+// that only the recipient sees it in their pending list.
+func (r *Repository) AddFriend(requesterID, recipientID string) error {
+	// Reject if a relationship already exists in EITHER direction.
 	var status string
 	err := r.db.QueryRow(
-		`SELECT status FROM friendships WHERE user_id = ? AND friend_id = ?`,
-		userID, friendID,
+		`SELECT status FROM friendships
+		 WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`,
+		requesterID, recipientID, recipientID, requesterID,
 	).Scan(&status)
 
 	if err == nil {
-		// Friendship exists, update status to accepted
-		if status != "accepted" {
-			_, err := r.db.Exec(
-				`UPDATE friendships SET status = 'accepted' WHERE user_id = ? AND friend_id = ?`,
-				userID, friendID,
-			)
-			return err
+		switch status {
+		case "accepted":
+			return fmt.Errorf("already friends")
+		case "blocked":
+			return fmt.Errorf("unable to send friend request")
+		default:
+			return fmt.Errorf("a friend request is already pending")
 		}
-		return fmt.Errorf("already friends")
 	}
-
 	if err != sql.ErrNoRows {
 		return fmt.Errorf("failed to check friendship: %w", err)
 	}
 
-	// Create new friendship request
 	_, err = r.db.Exec(
 		`INSERT INTO friendships (user_id, friend_id, status, created_at)
 		 VALUES (?, ?, 'pending', ?)`,
-		userID, friendID, time.Now(),
+		requesterID, recipientID, time.Now(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to add friend: %w", err)
@@ -60,16 +55,12 @@ func (r *Repository) AddFriend(userID, friendID string) error {
 	return nil
 }
 
-// AcceptFriend accepts a pending friend request.
-func (r *Repository) AcceptFriend(userID, friendID string) error {
-	// Ensure consistent ordering
-	if userID > friendID {
-		userID, friendID = friendID, userID
-	}
-
+// AcceptFriend accepts a pending request that requesterID sent to userID.
+func (r *Repository) AcceptFriend(userID, requesterID string) error {
 	result, err := r.db.Exec(
-		`UPDATE friendships SET status = 'accepted' WHERE user_id = ? AND friend_id = ? AND status = 'pending'`,
-		userID, friendID,
+		`UPDATE friendships SET status = 'accepted'
+		 WHERE user_id = ? AND friend_id = ? AND status = 'pending'`,
+		requesterID, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to accept friend request: %w", err)
@@ -83,16 +74,13 @@ func (r *Repository) AcceptFriend(userID, friendID string) error {
 	return nil
 }
 
-// RemoveFriend removes a friend relationship.
+// RemoveFriend removes a friendship/request in either direction (also used to
+// decline an incoming request or cancel one you sent).
 func (r *Repository) RemoveFriend(userID, friendID string) error {
-	// Ensure consistent ordering
-	if userID > friendID {
-		userID, friendID = friendID, userID
-	}
-
 	result, err := r.db.Exec(
-		`DELETE FROM friendships WHERE user_id = ? AND friend_id = ?`,
-		userID, friendID,
+		`DELETE FROM friendships
+		 WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`,
+		userID, friendID, friendID, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to remove friend: %w", err)
@@ -106,17 +94,20 @@ func (r *Repository) RemoveFriend(userID, friendID string) error {
 	return nil
 }
 
-// BlockFriend blocks a user.
+// BlockFriend blocks a user (directional: userID blocks friendID).
 func (r *Repository) BlockFriend(userID, friendID string) error {
-	// Ensure consistent ordering
-	if userID > friendID {
-		userID, friendID = friendID, userID
+	// Clear any existing relationship in either direction first.
+	if _, err := r.db.Exec(
+		`DELETE FROM friendships
+		 WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`,
+		userID, friendID, friendID, userID,
+	); err != nil {
+		return err
 	}
 
 	_, err := r.db.Exec(
 		`INSERT INTO friendships (user_id, friend_id, status, created_at)
-		 VALUES (?, ?, 'blocked', ?)
-		 ON CONFLICT(user_id, friend_id) DO UPDATE SET status = 'blocked'`,
+		 VALUES (?, ?, 'blocked', ?)`,
 		userID, friendID, time.Now(),
 	)
 	return err
@@ -176,17 +167,14 @@ func (r *Repository) GetPendingRequests(userID string) ([]string, error) {
 	return requesters, rows.Err()
 }
 
-// IsFriend checks if two users are friends.
+// IsFriend checks if two users are accepted friends (either direction).
 func (r *Repository) IsFriend(userID, friendID string) (bool, error) {
-	// Ensure consistent ordering
-	if userID > friendID {
-		userID, friendID = friendID, userID
-	}
-
 	var status string
 	err := r.db.QueryRow(
-		`SELECT status FROM friendships WHERE user_id = ? AND friend_id = ? AND status = 'accepted'`,
-		userID, friendID,
+		`SELECT status FROM friendships
+		 WHERE ((user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?))
+		   AND status = 'accepted'`,
+		userID, friendID, friendID, userID,
 	).Scan(&status)
 
 	if err == sql.ErrNoRows {
@@ -199,13 +187,8 @@ func (r *Repository) IsFriend(userID, friendID string) (bool, error) {
 	return true, nil
 }
 
-// IsBlocked checks if a user is blocked.
+// IsBlocked checks if userID has blocked blockedID (directional).
 func (r *Repository) IsBlocked(userID, blockedID string) (bool, error) {
-	// Ensure consistent ordering
-	if userID > blockedID {
-		userID, blockedID = blockedID, userID
-	}
-
 	var status string
 	err := r.db.QueryRow(
 		`SELECT status FROM friendships WHERE user_id = ? AND friend_id = ? AND status = 'blocked'`,

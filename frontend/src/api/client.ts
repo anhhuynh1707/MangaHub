@@ -16,11 +16,19 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
-// On 401, clear auth and redirect to /auth
+// On 401, clear auth and redirect to /auth — BUT only for an expired session.
+// A 401 from a credential endpoint (login / register / change-password) means
+// "wrong credentials in this request", which the form should display inline;
+// redirecting there would reload the page and erase the error message.
+const CREDENTIAL_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/change-password']
+
 apiClient.interceptors.response.use(
   (res) => res,
   (error) => {
-    if (error.response?.status === 401) {
+    const url: string = error.config?.url ?? ''
+    const isCredentialEndpoint = CREDENTIAL_ENDPOINTS.some((p) => url.includes(p))
+
+    if (error.response?.status === 401 && !isCredentialEndpoint) {
       useAuthStore.getState().clearAuth()
       window.location.href = '/auth'
     }
