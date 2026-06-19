@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import { Star, BookOpen, CheckCircle2, Clock, Activity as ActivityIcon, Calendar, Users, Download } from 'lucide-react'
 import { userApi } from '@/api/user'
 import { feedApi } from '@/api/feed'
@@ -96,7 +97,12 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="mx-auto max-w-3xl px-4 py-8"
+    >
       {/* ── Header card ───────────────────────────────────────────── */}
       <div className="mb-6 flex items-center gap-4 rounded-2xl border border-[var(--color-border-raw)] bg-[var(--color-surface)] p-6">
         <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-[var(--brand-red)] text-xl font-bold text-white">
@@ -179,7 +185,7 @@ export default function ProfilePage() {
       ) : (
         <FriendsPanel />
       )}
-    </div>
+    </motion.div>
   )
 }
 

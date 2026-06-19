@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import { Search, X, SlidersHorizontal, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { mangaApi, GENRES, SORT_OPTIONS } from '@/api/manga'
 import { MangaGrid } from '@/components/manga/MangaGrid'
@@ -45,7 +46,12 @@ export default function BrowsePage() {
   const hasActiveFilters = genre !== '' || status !== '' || sortBy !== 'title'
 
   return (
-    <div className="flex flex-col gap-5">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.25 }}
+      className="flex flex-col gap-5"
+    >
 
       {/* ── Page header ── */}
       <div className="flex items-center justify-between">
@@ -195,7 +201,7 @@ export default function BrowsePage() {
           </button>
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }
 

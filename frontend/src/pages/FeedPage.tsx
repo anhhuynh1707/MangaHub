@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import { Activity as ActivityIcon, Send, Loader2 } from 'lucide-react'
 import { feedApi, ACTIVITY_FILTERS } from '@/api/feed'
 import { ActivityItem } from '@/components/ActivityItem'
@@ -34,7 +35,12 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="mx-auto max-w-2xl px-4 py-8"
+    >
       {/* Header */}
       <div className="mb-6 flex items-center gap-2">
         <ActivityIcon className="h-6 w-6 text-[var(--brand-red)]" />
@@ -97,7 +103,7 @@ export default function FeedPage() {
           ))}
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }
 
