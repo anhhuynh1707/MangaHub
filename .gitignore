@@ -62,3 +62,8 @@ mangahub
 TASKS.html
 
 MangaHub - Manga & Comic Tracking System.html
+
+# --- Claude context & skills (local only, not for GitHub) ---
+CLAUDE.md
+CLAUDE.local.md
+.claude/
