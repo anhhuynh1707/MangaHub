@@ -52,13 +52,16 @@ config.json
 *.exe
 bin/
 
-# macOS / Linux compiled binaries (no extension)
-api-server
-tcp-server
-udp-server
-grpc-server
-tcp-client
-mangahub
+# macOS / Linux compiled binaries (no extension).
+# Leading slash anchors to repo root so these match ONLY the built binaries,
+# NOT the cmd/<name>/ source directories (e.g. cmd/api-server/).
+/api-server
+/tcp-server
+/udp-server
+/grpc-server
+/tcp-client
+/cli
+/mangahub
 TASKS.html
 
 MangaHub - Manga & Comic Tracking System.html
