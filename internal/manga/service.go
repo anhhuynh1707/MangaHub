@@ -1,11 +1,11 @@
 package manga
 
 import (
-	"errors"
 	"log"
 
 	"mangahub/pkg/cache"
 	"mangahub/pkg/models"
+	"mangahub/pkg/utils"
 )
 
 // Service handles manga business logic.
@@ -48,7 +48,7 @@ func (s *Service) Create(manga *models.Manga) error {
 		return err
 	}
 	if existing != nil {
-		return errors.New("manga with this ID already exists")
+		return utils.ErrConflict("manga with this ID already exists")
 	}
 	if err := s.repo.Create(manga); err != nil {
 		return err
@@ -76,7 +76,7 @@ func (s *Service) GetByID(id string) (*models.Manga, error) {
 		return nil, err
 	}
 	if manga == nil {
-		return nil, errors.New("manga not found")
+		return nil, utils.ErrNotFound("manga not found")
 	}
 
 	// Populate cache

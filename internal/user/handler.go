@@ -72,11 +72,7 @@ func (h *Handler) Register(c *gin.Context) {
 
 	user, err := h.service.Register(&req)
 	if err != nil {
-		if err.Error() == "username already taken" {
-			utils.ConflictResponse(c, err.Error())
-			return
-		}
-		utils.InternalServerErrorResponse(c, "Registration failed: "+err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -112,7 +108,7 @@ func (h *Handler) Login(c *gin.Context) {
 
 	resp, err := h.service.Login(&req)
 	if err != nil {
-		utils.UnauthorizedResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -139,7 +135,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 
 	user, err := h.service.GetProfile(userID)
 	if err != nil {
-		utils.NotFoundResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -193,11 +189,7 @@ func (h *Handler) AddToLibrary(c *gin.Context) {
 
 	entry, err := h.service.AddToLibrary(userID, &req)
 	if err != nil {
-		if err.Error() == "manga already in library" {
-			utils.ConflictResponse(c, err.Error())
-			return
-		}
-		utils.InternalServerErrorResponse(c, "Failed to add to library: "+err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -268,11 +260,7 @@ func (h *Handler) UpdateProgress(c *gin.Context) {
 
 	progress, err := h.service.UpdateProgress(userID, &req)
 	if err != nil {
-		if err.Error() == "manga not found in library" {
-			utils.NotFoundResponse(c, err.Error())
-			return
-		}
-		utils.InternalServerErrorResponse(c, "Failed to update progress")
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -347,11 +335,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	}
 
 	if err := h.service.ChangePassword(userID, &req); err != nil {
-		if err.Error() == "incorrect current password" {
-			utils.UnauthorizedResponse(c, err.Error())
-			return
-		}
-		utils.InternalServerErrorResponse(c, "Failed to change password")
+		utils.RespondError(c, err)
 		return
 	}
 

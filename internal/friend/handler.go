@@ -55,7 +55,7 @@ func (h *Handler) AddFriend(c *gin.Context) {
 
 	err = h.service.AddFriend(userID, req.FriendID)
 	if err != nil {
-		utils.InternalServerErrorResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (h *Handler) AcceptFriend(c *gin.Context) {
 
 	err = h.service.AcceptFriend(userID, friendID)
 	if err != nil {
-		utils.InternalServerErrorResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -123,7 +123,7 @@ func (h *Handler) DeclineFriend(c *gin.Context) {
 	// Remove friend (decline is same as removing pending request)
 	err = h.service.RemoveFriend(userID, friendID)
 	if err != nil {
-		utils.InternalServerErrorResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -152,7 +152,7 @@ func (h *Handler) RemoveFriend(c *gin.Context) {
 
 	err = h.service.RemoveFriend(userID, friendID)
 	if err != nil {
-		utils.InternalServerErrorResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -176,7 +176,7 @@ func (h *Handler) BlockFriend(c *gin.Context) {
 
 	err = h.service.BlockFriend(userID, blockID)
 	if err != nil {
-		utils.InternalServerErrorResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -217,7 +217,7 @@ func (h *Handler) GetFriends(c *gin.Context) {
 
 	friends, err := h.service.GetFriends(userID)
 	if err != nil {
-		utils.InternalServerErrorResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -285,7 +285,7 @@ func (h *Handler) GetPendingRequests(c *gin.Context) {
 	// Get pending friend requests for this user
 	pending, err := h.service.GetPendingRequests(userID)
 	if err != nil {
-		utils.InternalServerErrorResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -318,7 +318,7 @@ func (h *Handler) GetFriendCount(c *gin.Context) {
 
 	count, err := h.service.GetFriendCount(userID)
 	if err != nil {
-		utils.InternalServerErrorResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 
@@ -361,7 +361,7 @@ func (h *Handler) CheckFriendship(c *gin.Context) {
 
 	isFriend, err := h.service.IsFriend(userID, req.FriendID)
 	if err != nil {
-		utils.InternalServerErrorResponse(c, err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 

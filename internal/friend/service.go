@@ -1,7 +1,7 @@
 package friend
 
 import (
-	"fmt"
+	"mangahub/pkg/utils"
 )
 
 // Service handles business logic for friendships.
@@ -17,7 +17,7 @@ func NewService(repo *Repository) *Service {
 // AddFriend sends a friend request to another user.
 func (s *Service) AddFriend(userID, friendID string) error {
 	if userID == friendID {
-		return fmt.Errorf("cannot add yourself as a friend")
+		return utils.ErrBadRequest("cannot add yourself as a friend")
 	}
 
 	return s.repo.AddFriend(userID, friendID)
@@ -36,7 +36,7 @@ func (s *Service) RemoveFriend(userID, friendID string) error {
 // BlockFriend blocks a user.
 func (s *Service) BlockFriend(userID, blockedID string) error {
 	if userID == blockedID {
-		return fmt.Errorf("cannot block yourself")
+		return utils.ErrBadRequest("cannot block yourself")
 	}
 
 	return s.repo.BlockFriend(userID, blockedID)

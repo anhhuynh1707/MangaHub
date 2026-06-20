@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"mangahub/pkg/utils"
 )
 
 // Repository handles all friendship database operations.
@@ -32,11 +34,11 @@ func (r *Repository) AddFriend(requesterID, recipientID string) error {
 	if err == nil {
 		switch status {
 		case "accepted":
-			return fmt.Errorf("already friends")
+			return utils.ErrConflict("already friends")
 		case "blocked":
-			return fmt.Errorf("unable to send friend request")
+			return utils.ErrForbidden("unable to send friend request")
 		default:
-			return fmt.Errorf("a friend request is already pending")
+			return utils.ErrConflict("a friend request is already pending")
 		}
 	}
 	if err != sql.ErrNoRows {
@@ -68,7 +70,7 @@ func (r *Repository) AcceptFriend(userID, requesterID string) error {
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("no pending friend request found")
+		return utils.ErrNotFound("no pending friend request found")
 	}
 
 	return nil
@@ -88,7 +90,7 @@ func (r *Repository) RemoveFriend(userID, friendID string) error {
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("friendship not found")
+		return utils.ErrNotFound("friendship not found")
 	}
 
 	return nil

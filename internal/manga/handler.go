@@ -177,11 +177,7 @@ func (h *Handler) Create(c *gin.Context) {
 	manga.Description = cleanDesc
 
 	if err := h.service.Create(&manga); err != nil {
-		if err.Error() == "manga with this ID already exists" {
-			utils.ConflictResponse(c, err.Error())
-			return
-		}
-		utils.InternalServerErrorResponse(c, "Failed to create manga: "+err.Error())
+		utils.RespondError(c, err)
 		return
 	}
 

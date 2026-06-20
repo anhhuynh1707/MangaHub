@@ -1,7 +1,6 @@
 package user
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"mangahub/internal/auth"
 	"mangahub/pkg/cache"
 	"mangahub/pkg/models"
+	"mangahub/pkg/utils"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -51,13 +51,13 @@ func (s *Service) Register(req *models.RegisterRequest) (*models.User, error) {
 		return nil, err
 	}
 	if existing != nil {
-		return nil, errors.New("username already taken")
+		return nil, utils.ErrConflict("username already taken")
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, errors.New("failed to hash password")
+		return nil, utils.ErrInternal("failed to hash password")
 	}
 
 	// Generate user ID from username (slug-style)
@@ -84,18 +84,18 @@ func (s *Service) Login(req *models.LoginRequest) (*models.LoginResponse, error)
 		return nil, err
 	}
 	if user == nil {
-		return nil, errors.New("invalid username or password")
+		return nil, utils.ErrUnauthorized("invalid username or password")
 	}
 
 	// Compare passwords
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return nil, errors.New("invalid username or password")
+		return nil, utils.ErrUnauthorized("invalid username or password")
 	}
 
 	// Generate JWT token
 	token, err := auth.GenerateToken(user.ID, user.Username)
 	if err != nil {
-		return nil, errors.New("failed to generate token")
+		return nil, utils.ErrInternal("failed to generate token")
 	}
 
 	return &models.LoginResponse{
@@ -119,7 +119,7 @@ func (s *Service) GetProfile(userID string) (*models.User, error) {
 		return nil, err
 	}
 	if user == nil {
-		return nil, errors.New("user not found")
+		return nil, utils.ErrNotFound("user not found")
 	}
 
 	// Populate cache
@@ -155,7 +155,7 @@ func (s *Service) AddToLibrary(userID string, req *models.AddToLibraryRequest) (
 		return nil, err
 	}
 	if existing != nil {
-		return nil, errors.New("manga already in library")
+		return nil, utils.ErrConflict("manga already in library")
 	}
 
 	status := req.Status
@@ -196,7 +196,7 @@ func (s *Service) GetLibrary(userID string) (*models.UserData, error) {
 		return nil, err
 	}
 	if user == nil {
-		return nil, errors.New("user not found")
+		return nil, utils.ErrNotFound("user not found")
 	}
 
 	lists, err := s.repo.GetUserReadingLists(userID)
@@ -225,7 +225,7 @@ func (s *Service) UpdateProgress(userID string, req *models.UpdateProgressReques
 		return nil, err
 	}
 	if existing == nil {
-		return nil, errors.New("manga not found in library")
+		return nil, utils.ErrNotFound("manga not found in library")
 	}
 
 	status := req.Status
@@ -268,18 +268,18 @@ func (s *Service) ChangePassword(userID string, req *models.ChangePasswordReques
 		return err
 	}
 	if user == nil {
-		return errors.New("user not found")
+		return utils.ErrNotFound("user not found")
 	}
 
 	// Verify old password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
-		return errors.New("incorrect current password")
+		return utils.ErrUnauthorized("incorrect current password")
 	}
 
 	// Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return errors.New("failed to hash new password")
+		return utils.ErrInternal("failed to hash new password")
 	}
 
 	return s.repo.UpdatePasswordHash(userID, string(hashedPassword))
