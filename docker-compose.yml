@@ -43,6 +43,7 @@ services:
       - GRPC_PORT=mangahub-grpc:9092
       - DB_PATH=/app/data/mangahub.db
       - GIN_MODE=release
+      - LOG_FORMAT=json
       - ENABLE_TCP_SERVER=false
       - ENABLE_UDP_SERVER=false
       - ENABLE_GRPC_SERVER=false

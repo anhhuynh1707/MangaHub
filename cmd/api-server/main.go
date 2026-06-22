@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 
@@ -16,6 +16,7 @@ import (
 	wsPkg "mangahub/internal/websocket"
 	"mangahub/pkg/cache"
 	"mangahub/pkg/database"
+	"mangahub/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 
@@ -24,6 +25,7 @@ import (
 
 func main() {
 	loadEnvFile(".env")
+	logger.Init() // structured JSON logging (reads LOG_LEVEL)
 
 	// --- Configuration ---
 	port := envOr("PORT", "8080")
@@ -44,7 +46,8 @@ func main() {
 	// --- Database + cache ---
 	db, err := database.InitDB(dbPath)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		slog.Error("failed to initialize database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -72,7 +75,7 @@ func main() {
 
 	// --- Server (holds every dependency the HTTP handlers need) ---
 	s := &APIServer{
-		Router:            gin.Default(),
+		Router:            gin.New(),
 		Database:          db,
 		Cache:             redisCache,
 		Hub:               wsPkg.NewChatHub(),
@@ -94,6 +97,10 @@ func main() {
 		UseClients:        !enableTCP || !enableUDP,
 	}
 
+	// Recovery (outermost) + structured per-request logging. Replaces the text
+	// logger that gin.Default() would have added.
+	s.Router.Use(gin.Recovery(), logger.RequestLogger())
+
 	// --- Real-time services (goroutines) ---
 	startTCP(s, enableTCP, userService)
 	startUDP(s, enableUDP)
@@ -105,10 +112,13 @@ func main() {
 
 	// --- Routes + start ---
 	s.registerRoutes(corsOrigins())
-	log.Printf("🚀 MangaHub API server starting on port %s", port)
-	log.Printf("🏥 Health check: http://localhost:%s/health", port)
-	log.Printf("📚 Swagger UI:  http://localhost:%s/swagger/index.html", port)
+	slog.Info("MangaHub API server starting",
+		"port", port,
+		"health", "http://localhost:"+port+"/health",
+		"swagger", "http://localhost:"+port+"/swagger/index.html",
+	)
 	if err := s.Router.Run(":" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		slog.Error("server failed to start", "error", err)
+		os.Exit(1)
 	}
 }
