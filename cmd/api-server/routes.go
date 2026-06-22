@@ -4,10 +4,18 @@ import (
 	"time"
 
 	"mangahub/internal/auth"
+	"mangahub/pkg/ratelimit"
 
 	"github.com/gin-contrib/cors"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+)
+
+// Per-IP rate limits (requests/minute). Public requests use the lower limit;
+// requests carrying an Authorization header use the higher one (R1-6).
+const (
+	rateLimitPublic = 100
+	rateLimitAuth   = 300
 )
 
 // registerRoutes wires every HTTP route to its handler method. Handlers contain
@@ -23,6 +31,9 @@ func (s *APIServer) registerRoutes(allowedOrigins []string) {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	// Per-IP rate limiting (after CORS so 429s still carry CORS headers).
+	r.Use(ratelimit.Middleware(rateLimitPublic, rateLimitAuth))
 
 	// ── Health ──
 	r.GET("/health", s.Health)
