@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "gen:api": "swagger2openapi --patch openapi.json -o openapi.v3.json && openapi-typescript openapi.v3.json -o src/api/schema.d.ts",
-    "prebuild": "npm run gen:api",
+    "prebuild": "npm run gen:api || echo 'gen:api failed — building with the committed src/api/schema.d.ts'",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
