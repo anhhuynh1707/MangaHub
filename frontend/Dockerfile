@@ -3,7 +3,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+# .npmrc carries legacy-peer-deps so npm ci tolerates the openapi-typescript
+# peer range lagging behind TypeScript 6.
+COPY package*.json .npmrc ./
 RUN npm ci
 
 COPY . .

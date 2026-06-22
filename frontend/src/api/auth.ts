@@ -1,10 +1,14 @@
 import { apiClient } from './client'
+import type { LoginRequest, RegisterRequest, ChangePasswordRequest } from './generated'
 
-export interface LoginPayload    { username: string; password: string }
-export interface RegisterPayload { username: string; password: string; email?: string }
-export interface AuthUser        { id: string; username: string }
-export interface AuthResponse    { token: string; user: AuthUser }
-export interface ChangePasswordPayload { old_password: string; new_password: string }
+// Request payload types come from the generated OpenAPI schema (single source of
+// truth — regenerate with `npm run gen:api` when the backend spec changes).
+export type LoginPayload = LoginRequest
+export type RegisterPayload = RegisterRequest
+export type ChangePasswordPayload = ChangePasswordRequest
+
+export interface AuthUser     { id: string; username: string }
+export interface AuthResponse { token: string; user: AuthUser }
 
 export const authApi = {
   login: (data: LoginPayload) =>
