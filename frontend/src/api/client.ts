@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '@/store/authStore'
+import { notify } from '@/lib/notify'
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080',
@@ -27,10 +28,23 @@ apiClient.interceptors.response.use(
   (error) => {
     const url: string = error.config?.url ?? ''
     const isCredentialEndpoint = CREDENTIAL_ENDPOINTS.some((p) => url.includes(p))
+    const status = error.response?.status as number | undefined
 
-    if (error.response?.status === 401 && !isCredentialEndpoint) {
+    if (status === 401 && !isCredentialEndpoint) {
       useAuthStore.getState().clearAuth()
       window.location.href = '/auth'
+      return Promise.reject(error)
+    }
+
+    // Global toast for UNEXPECTED errors only — network failures and 5xx.
+    // Ordinary 4xx (validation/conflict) and credential errors are shown inline
+    // by the relevant form/component, so we don't double-notify here.
+    if (!isCredentialEndpoint) {
+      if (!error.response) {
+        notify.error('Network error', 'Could not reach the server. Check your connection.')
+      } else if (status && status >= 500) {
+        notify.error('Server error', 'Something went wrong on our end. Please try again.')
+      }
     }
     return Promise.reject(error)
   }

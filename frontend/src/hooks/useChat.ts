@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { buildChatSocketUrl, type ChatMessage } from '@/api/chat'
+import { notify } from '@/lib/notify'
 
 export type ChatStatus = 'connecting' | 'open' | 'closed' | 'error'
 
@@ -57,6 +58,9 @@ export function useChat(room: string): UseChatResult {
       socketRef.current = sock
 
       sock.onopen = () => {
+        if (attempts > 0 && !stopped) {
+          notify.success('Reconnected to chat')
+        }
         attempts = 0
         if (!stopped) setStatus('open')
       }
@@ -97,6 +101,10 @@ export function useChat(room: string): UseChatResult {
       sock.onclose = () => {
         if (socketRef.current === sock) socketRef.current = null
         if (stopped) return // closed by cleanup — do NOT reconnect
+        // Alert once per disconnect episode (on the first drop, before backoff).
+        if (attempts === 0) {
+          notify.warning('Disconnected from chat', 'Trying to reconnect…')
+        }
         setStatus('closed')
         attempts += 1
         const delay = Math.min(1000 * 2 ** (attempts - 1), 10_000)

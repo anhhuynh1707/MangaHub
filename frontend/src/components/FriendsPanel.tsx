@@ -4,6 +4,7 @@ import { UserPlus, UserCheck, UserX, Trash2, Loader2, Users } from 'lucide-react
 import { friendApi, userIdFromUsername, usernameFromUserId } from '@/api/friend'
 import { userApi } from '@/api/user'
 import { useDebounce } from '@/hooks/useDebounce'
+import { notify } from '@/lib/notify'
 
 function Avatar({ name }: { name: string }) {
   return (
@@ -66,12 +67,18 @@ export function FriendsPanel() {
 
   const acceptMutation = useMutation({
     mutationFn: (friendId: string) => friendApi.accept(friendId),
-    onSuccess: refresh,
+    onSuccess: (_, friendId) => {
+      notify.success(`You are now friends with ${usernameFromUserId(friendId)}`)
+      refresh()
+    },
   })
 
   const declineMutation = useMutation({
     mutationFn: (friendId: string) => friendApi.decline(friendId),
-    onSuccess: refresh,
+    onSuccess: () => {
+      notify.info('Friend request declined')
+      refresh()
+    },
   })
 
   // Submitting the form (typed a full username and pressed Send) falls back to
@@ -213,6 +220,7 @@ function FriendRow({ friendId, onRemoved }: { friendId: string; onRemoved: () =>
     mutationFn: () => friendApi.remove(friendId),
     onSuccess: () => {
       setConfirm(false)
+      notify.success(`Removed ${usernameFromUserId(friendId)} from friends`)
       onRemoved()
     },
   })

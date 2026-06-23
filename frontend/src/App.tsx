@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Toaster } from 'sonner'
 import { PageShell } from '@/components/layout/PageShell'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
+import { useUIStore } from '@/store/uiStore'
 import BrowsePage from '@/pages/BrowsePage'
 import AuthPage from '@/pages/AuthPage'
 import MangaDetailPage from '@/pages/MangaDetailPage'
@@ -21,12 +24,16 @@ const queryClient = new QueryClient({
 })
 
 export default function App() {
+  const theme = useUIStore((s) => s.theme)
+
   return (
     <QueryClientProvider client={queryClient}>
+      {/* Global toast host — themed to match the app, errors in rich colors */}
+      <Toaster theme={theme} richColors closeButton position="top-right" />
       <BrowserRouter>
         <Routes>
           {/* Public */}
-          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/auth" element={<ErrorBoundary label="Sign in"><AuthPage /></ErrorBoundary>} />
 
           {/* Shell wraps all app routes */}
           <Route element={<PageShell />}>
