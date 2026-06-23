@@ -5,11 +5,13 @@ import { BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/store/authStore'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { notify } from '@/lib/notify'
 
 type Tab = 'login' | 'register'
 
 export default function AuthPage() {
   const [tab, setTab] = useState<Tab>('login')
+  const [prefillUsername, setPrefillUsername] = useState('')
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const navigate = useNavigate()
 
@@ -63,7 +65,7 @@ export default function AuthPage() {
                   exit={{ opacity: 0, x: 16 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <LoginForm onSuccess={() => navigate('/')} />
+                  <LoginForm onSuccess={() => navigate('/')} initialUsername={prefillUsername} />
                 </motion.div>
               ) : (
                 <motion.div
@@ -73,7 +75,12 @@ export default function AuthPage() {
                   exit={{ opacity: 0, x: -16 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <RegisterForm onSuccess={() => navigate('/')} />
+                  <RegisterForm
+                    onSuccess={(username) => {
+                      setPrefillUsername(username)
+                      setTab('login')
+                    }}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -104,8 +111,8 @@ export default function AuthPage() {
 }
 
 /* ── Login Form ──────────────────────────────────────────────────── */
-function LoginForm({ onSuccess }: { onSuccess: () => void }) {
-  const [username, setUsername] = useState('')
+function LoginForm({ onSuccess, initialUsername = '' }: { onSuccess: () => void; initialUsername?: string }) {
+  const [username, setUsername] = useState(initialUsername)
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
@@ -126,6 +133,7 @@ function LoginForm({ onSuccess }: { onSuccess: () => void }) {
       const res = await authApi.login({ username: username.trim(), password })
       const { token, user } = res.data.data
       setAuth(token, user.id, user.username)
+      notify.success(`Welcome back, ${user.username}!`)
       onSuccess()
     } catch (err: unknown) {
       const msg = extractError(err)
@@ -167,14 +175,13 @@ function LoginForm({ onSuccess }: { onSuccess: () => void }) {
 }
 
 /* ── Register Form ───────────────────────────────────────────────── */
-function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
+function RegisterForm({ onSuccess }: { onSuccess: (username: string) => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const setAuth = useAuthStore((s) => s.setAuth)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -199,10 +206,11 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
 
     setLoading(true)
     try {
-      const res = await authApi.register({ username: username.trim(), password })
-      const { token, user } = res.data.data
-      setAuth(token, user.id, user.username)
-      onSuccess()
+      const name = username.trim()
+      await authApi.register({ username: name, password })
+      // Do NOT auto-login — send the user to the sign-in tab to log in.
+      notify.success('Account created — please sign in.')
+      onSuccess(name)
     } catch (err: unknown) {
       setError(extractError(err) || 'Registration failed. Please try again.')
     } finally {

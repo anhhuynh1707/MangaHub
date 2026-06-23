@@ -4,6 +4,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { authApi } from '@/api/auth'
+import { notify } from '@/lib/notify'
 
 export function Navbar() {
   const { isAuthenticated, username, clearAuth } = useAuthStore()
@@ -11,8 +12,10 @@ export function Navbar() {
   const navigate = useNavigate()
 
   async function handleLogout() {
+    const name = username // capture before clearAuth wipes it
     try { await authApi.logout() } catch { /* ignore */ }
     clearAuth()
+    notify.success(name ? `Goodbye, ${name}!` : 'Signed out')
     navigate('/auth')
   }
 
