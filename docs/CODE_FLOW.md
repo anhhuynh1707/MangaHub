@@ -7,14 +7,23 @@
 ### 1.1 Architecture Overview
 
 ```
-Client (CLI / curl)
+Client (React SPA / CLI / curl)
   │
   ▼
-cmd/api-server/main.go          ← Entry point, wires everything
+cmd/api-server/  (package main — wiring + APIServer methods)
+  ├── main.go         ← ~110 lines: config, build *APIServer, start, run
+  ├── server.go       ← APIServer struct (holds every handler dependency)
+  ├── routes.go       ← registerRoutes(): path → handler-method map + middleware
+  ├── bootstrap.go    ← startTCP/UDP/GRPC, seedDatabase, env/CORS helpers
+  └── health.go / sync.go / notify.go / data.go / chat.go  ← infra endpoints
   │
-  ├── gin.Engine (Router)        ← HTTP framework
-  │     │
-  │     ├── auth.AuthMiddleware()    ← JWT validation (internal/auth/jwt.go)
+  ├── gin.Engine (gin.New)        ← HTTP framework
+  │     │  Middleware chain (outer → inner):
+  │     ├── gin.Recovery()              ← panic recovery
+  │     ├── logger.RequestLogger()      ← structured per-request log + X-Request-ID
+  │     ├── cors                        ← gin-contrib/cors
+  │     ├── ratelimit.Middleware()      ← per-IP 100/min public, 300/min authed
+  │     ├── auth.AuthMiddleware()       ← JWT validation (per route group)
   │     │
   │     ├── userHandler.*            ← internal/user/handler.go
   │     ├── mangaHandler.*           ← internal/manga/handler.go
@@ -23,59 +32,91 @@ cmd/api-server/main.go          ← Entry point, wires everything
   │     ├── sharedListHandler.*      ← internal/sharedlist/handler.go
   │     └── activityHandler.*        ← internal/activity/handler.go
   │
-  ├── *Service  (business logic)     ← internal/*/service.go
+  ├── *Service  (business logic, return *utils.AppError)  ← internal/*/service.go
   ├── *Repository (raw SQL)          ← internal/*/repository.go
+  ├── pkg/logger/logger.go           ← slog setup + RequestLogger middleware
+  ├── pkg/ratelimit/ratelimit.go     ← token-bucket rate limiter
+  ├── pkg/utils/errors.go            ← AppError + RespondError
   ├── pkg/cache/redis.go             ← Redis caching layer
-  └── pkg/database/sqlite.go         ← SQLite schema + InitDB
+  └── pkg/database/sqlite.go         ← SQLite schema + InitDB (WAL, busy_timeout)
 ```
 
 Each domain follows the **Handler → Service → Repository** pattern:
 
 | Layer | File | Responsibility |
 |---|---|---|
-| Handler | `internal/*/handler.go` | Parse HTTP request, call service, write HTTP response |
-| Service | `internal/*/service.go` | Business rules, validation, cache read/write |
+| Handler | `internal/*/handler.go` | Parse HTTP request, call service, write response via `utils.RespondError` on error |
+| Service | `internal/*/service.go` | Business rules, validation, cache; returns `*utils.AppError` (carries HTTP status) for known errors |
 | Repository | `internal/*/repository.go` | Raw SQL queries against SQLite |
+
+> **Error handling (R1-2):** services return typed `*AppError`s; handlers call
+> `utils.RespondError(c, err)` which maps the error's `Code` to the HTTP status
+> (409/404/401/403/400) — no more `err.Error() == "..."` string matching.
 
 ---
 
 ### 1.2 Server Bootstrap (`cmd/api-server/main.go`)
 
-**Startup sequence (lines 46–1042):**
+After the R1-1 refactor, `main()` is ~110 lines of wiring; handler bodies live in
+methods on `*APIServer` across the sibling files.
 
 ```
 main()
- ├─ loadEnvFile(".env")                         // Read .env, set os env vars
- ├─ database.InitDB(dbPath)                     // pkg/database/sqlite.go:17
+ ├─ loadEnvFile(".env")                         // bootstrap.go — read .env
+ ├─ logger.Init()                               // pkg/logger — slog JSON/text + std-log bridge
+ ├─ database.InitDB(dbPath)                     // pkg/database/sqlite.go (WAL + busy_timeout + FK)
  │    └─ createSchema(db)                       // Creates 7 tables + indexes
- ├─ cache.New(redisAddr, password, db)          // pkg/cache/redis.go:43
- │    └─ redis.Ping()                           // Graceful fallback if unavailable
+ ├─ cache.New(...)                              // pkg/cache/redis.go — graceful fallback
  │
- ├─ userPkg.NewRepository(db)                   // internal/user/repository.go
- ├─ userPkg.NewService(userRepo)                // internal/user/service.go
- ├─ mangaPkg.NewRepository(db)                  // internal/manga/repository.go
- ├─ mangaPkg.NewService(mangaRepo)              // internal/manga/service.go
- ├─ review.NewRepository(db) → NewService()
- ├─ friend.NewRepository(db) → NewService()
- ├─ sharedlist.NewRepository(db) → NewService()
- ├─ activity.NewRepository(db) → NewService()
+ ├─ <repo> := <pkg>.NewRepository(db)           // user / manga / review / friend / sharedlist / activity
+ ├─ <svc>  := <pkg>.NewService(<repo>)
+ ├─ recommendation.NewService(db)
+ ├─ <svc>.SetCache(redisCache)                  // manga / user / activity
  │
- ├─ mangaService.SetCache(redisCache)           // Inject Redis into services
- ├─ userService.SetCache(redisCache)
- ├─ activityService.SetCache(redisCache)
+ ├─ s := &APIServer{                            // server.go — holds all deps + handlers
+ │      Router: gin.New(), Database, Cache, Hub, …Service, …Handler, Port, … }
+ ├─ s.Router.Use(gin.Recovery(), logger.RequestLogger())   // outer middleware
  │
- ├─ seedDatabase(mangaService, mangaDexClient)  // Auto-seed if <200 manga
+ ├─ startTCP(s,…) / startUDP(s,…) / go s.Hub.Run() / startGRPC(s,…)   // bootstrap.go
+ ├─ go seedDatabase(...)                        // BACKGROUND — API listens immediately
  │
- ├─ userPkg.NewHandler(userService)             // Create HTTP handlers
- ├─ mangaPkg.NewHandler(mangaService)
- ├─ review.NewHandler(reviewService, activityService, mangaService)
- ├─ friend.NewHandler(friendService, activityService)
- ├─ sharedlist.NewHandler(sharedListService, activityService)
- ├─ activity.NewHandler(activityService)
- │
- ├─ Register all routes on gin.Engine           // Lines 226–1022
- └─ r.Run(":8080")                              // Start HTTP listener
+ ├─ s.registerRoutes(corsOrigins())            // routes.go — CORS + RateLimit + all routes
+ └─ s.Router.Run(":" + port)                    // Start HTTP listener
 ```
+
+`NewHandler` signatures grew to support cross-cutting features, e.g.
+`userPkg.NewHandler(userService, activityService, mangaService)` (logs library
+activities) and `review.NewHandler(reviewService, activityService, mangaService)`.
+
+---
+
+### 1.2b Request Pipeline, Logging & Rate Limiting
+
+Every request passes through this chain (registered in `main.go` + `routes.go`):
+
+```
+request
+  → gin.Recovery()                 // turns panics into 500s
+  → logger.RequestLogger()         // pkg/logger — assigns request_id, sets
+  │                                //   X-Request-ID header; after the handler runs,
+  │                                //   logs one structured line:
+  │                                //   {request_id, method, path, status,
+  │                                //    latency_ms, client_ip, user_id}
+  → cors                           // gin-contrib/cors
+  → ratelimit.Middleware(100, 300) // pkg/ratelimit — per-IP token bucket;
+  │                                //   Authorization header → 300/min tier,
+  │                                //   else 100/min; /health* and /swagger* exempt;
+  │                                //   over limit → 429
+  → auth.AuthMiddleware()          // on protected route groups only — validates JWT,
+  │                                //   sets user_id + username in the gin context
+  → handler method                 // logic; on error → utils.RespondError(c, err)
+```
+
+**Logging config:** `LOG_LEVEL` = debug|info|warn|error (default info);
+`LOG_FORMAT` = text (readable, default for local dev) | json (set in
+docker-compose for production). Log level is chosen by status: 2xx → INFO,
+4xx → WARN, 5xx → ERROR. The std `log` package is bridged into slog, so legacy
+`log.Printf` calls across all packages also emit structured output.
 
 ---
 

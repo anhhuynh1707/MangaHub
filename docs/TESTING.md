@@ -62,14 +62,28 @@ Remove-Item .\data\mangahub.db -Force -ErrorAction SilentlyContinue
 go run ./cmd/api-server/
 ```
 
-**Expected output:**
+**Logging is now structured (slog).** By default it prints readable text for
+local dev; set `LOG_FORMAT=json` for machine-parseable output and `LOG_LEVEL`
+(debug|info|warn|error) to control verbosity:
+
+```bash
+LOG_FORMAT=text LOG_LEVEL=info go run ./cmd/api-server/   # default (readable)
+LOG_FORMAT=json go run ./cmd/api-server/                  # JSON (prod-style)
 ```
-✅ Successfully seeded 100 manga series
-🚀 MangaHub API server starting on port 8080
-📡 TCP Progress Sync Server listening on :9090
-📢 UDP Notification Server listening on :9091
-💬 WebSocket ChatHub started
+
+**Expected output (text mode):**
 ```
+time=10:32:02 level=INFO msg="MangaHub API server starting" port=8080 ...
+time=10:32:05 level=INFO msg=request request_id=c6e073da method=GET path=/health status=200 latency_ms=0 client_ip=::1
+```
+Each request logs a line with `request_id`, `method`, `path`, `status`,
+`latency_ms`, and `user_id` (when authenticated). Every response also carries an
+`X-Request-Id` header.
+
+> **Note — rate limiting:** the API limits each IP to **100 req/min** (public) /
+> **300 req/min** (authenticated); `/health*` and `/swagger*` are exempt. A burst
+> of test calls beyond the limit returns **429 Too Many Requests** — expected,
+> not a failure.
 
 ### Register Test Users
 
@@ -1826,6 +1840,65 @@ grpcurl -plaintext \
   -d '{"manga_id":"one-piece","user_id":"user-alice"}' \
   localhost:9092 mangahub.MangaService/WatchMangaUpdates
 ```
+
+---
+
+## Frontend E2E Tests (Playwright)
+
+End-to-end tests live in `frontend/e2e/` and drive a real browser through the
+full user journey: **register → login → add manga to library → update progress →
+leave a review → join chat → clean up**. The test seeds its own manga via the API
+(so it doesn't depend on the MangaDex seed) and deletes it (and its library entry,
+review, and activity rows) at the end.
+
+**Prerequisites:** the backend running on `:8080`. Playwright auto-starts the
+Vite dev server itself.
+
+```bash
+# 1. Backend (must include the ClearActivityFeed fix used by the cleanup step):
+go run ./cmd/api-server/
+#    or: docker compose up -d --build mangahub-api redis
+
+# 2. Run the tests (from frontend/):
+cd frontend
+npm run test:e2e          # headless
+npm run test:e2e:ui       # interactive UI mode — watch each step
+npx playwright show-report
+```
+
+First time only: `npx playwright install chromium`.
+
+**Pointing at a different backend / running app:**
+
+```bash
+# Run against an already-running app (e.g. the Docker frontend on :3000):
+E2E_BASE_URL=http://localhost:3000 E2E_API_URL=http://localhost:8080 npm run test:e2e
+```
+
+- `E2E_BASE_URL` — where the app is served (default `http://localhost:5173`,
+  which the config auto-starts). When set, the Vite dev server is **not** started.
+- `E2E_API_URL` — backend base the test calls directly for setup/cleanup
+  (default `http://localhost:8080`).
+
+**In CI:** the `e2e` job in `.github/workflows/ci.yml` builds + starts the Go
+backend, installs the Chromium browser, runs `npm run test:e2e`, and uploads the
+Playwright HTML report as an artifact.
+
+---
+
+## Frontend API types (generated)
+
+The frontend's request types are generated from the backend Swagger spec:
+
+```bash
+cd frontend
+npm run gen:api     # swagger2openapi (2.0→3.0) → openapi-typescript → src/api/schema.d.ts
+```
+
+This also runs automatically as a `prebuild` step (`npm run build`). If the spec
+is missing/broken, the build falls back to the committed `src/api/schema.d.ts`.
+When the backend API changes, re-copy the spec
+(`cp docs/swagger.json frontend/openapi.json`) and re-run `gen:api`.
 
 ---
 

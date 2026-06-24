@@ -1,12 +1,39 @@
 # MangaHub
 
-MangaHub is a comprehensive manga tracking and reading platform featuring a robust backend infrastructure written in Go. It supports HTTP REST APIs, real-time TCP progress synchronization, UDP notifications, and WebSocket-based chat functionalities.
+MangaHub is a full-stack manga tracking and reading platform. The **Go backend**
+exposes an HTTP REST API plus real-time TCP progress synchronization, UDP
+notifications, gRPC, and WebSocket chat. The **React + Vite frontend** is a single
+-page app for browsing manga, tracking a reading library, writing reviews,
+chatting in real time, and managing friends and an activity feed. Everything runs
+under Docker Compose, with structured logging, per-IP rate limiting, OpenAPI-
+generated TypeScript types, and a Playwright end-to-end test suite in CI.
 
 ## Table of Contents
-1. [Architecture Overview](#architecture-overview)
-2. [Setup Instructions](#setup-instructions)
-3. [API Documentation](#api-documentation)
-4. [CLI Commands](#cli-commands)
+1. [Tech Stack](#tech-stack)
+2. [Architecture Overview](#architecture-overview)
+3. [Setup Instructions](#setup-instructions)
+4. [Frontend (React SPA)](#frontend-react-spa)
+5. [Testing](#testing)
+6. [Screenshots](#screenshots)
+7. [API Documentation](#api-documentation)
+8. [CLI Commands](#cli-commands)
+
+---
+
+## Tech Stack
+
+**Backend** — Go 1.25, [Gin](https://github.com/gin-gonic/gin),
+`gorilla/websocket`, `mattn/go-sqlite3` (SQLite + WAL), `redis/go-redis`,
+`golang-jwt`, `golang.org/x/time/rate` (rate limiting), `log/slog` (structured
+logging), `swaggo/swag` (OpenAPI).
+
+**Frontend** — React 19 + TypeScript, [Vite](https://vite.dev), Tailwind CSS v4,
+shadcn/ui, TanStack Query (server state), Zustand (client state), React Router v7,
+Framer Motion, Sonner (toasts), axios.
+
+**Tooling** — Docker Compose, GitHub Actions CI (Go build/test/vet, frontend
+build, Docker smoke test, Playwright E2E, GHCR publish), `openapi-typescript` +
+`swagger2openapi` (generated API types), Playwright (E2E).
 
 ---
 
@@ -39,8 +66,24 @@ MangaHub operates using a multi-protocol approach, featuring both a monolithic H
 - `pkg/cache` - Redis client wrapper
 - `pkg/database` - SQLite store and repositories
 - `pkg/models` - shared models
-- `pkg/utils` - shared utilities
+- `pkg/utils` - shared utilities + typed `AppError` / `RespondError`
+- `pkg/logger` - structured slog setup + per-request logging middleware
+- `pkg/ratelimit` - per-IP token-bucket rate limiter
 - `proto` - protobuf definitions and generated code
+
+**Frontend (`frontend/`)**
+- `src/pages` - route pages (Browse, Manga detail, Library, Chat, Feed, Profile, Auth)
+- `src/components` - UI + layout (Navbar, Sidebar, ErrorBoundary, FriendsPanel, …)
+- `src/api` - axios client + per-domain API modules + generated `schema.d.ts`
+- `src/hooks` - `useChat` (WebSocket), `useDebounce`
+- `src/store` - Zustand stores (`authStore`, `uiStore`)
+- `src/lib` - `notify` (Sonner toast helper)
+- `e2e` - Playwright end-to-end tests
+
+> **api-server layout:** after the refactor, `cmd/api-server/main.go` is ~110
+> lines of wiring; route handlers are methods on `*APIServer` split across
+> `routes.go`, `health.go`, `sync.go`, `notify.go`, `data.go`, `chat.go`, and
+> `bootstrap.go`.
 
 ### HTTP REST API & Data Flow
 
@@ -51,10 +94,15 @@ The core HTTP API follows a standard layered architecture:
 
 **Data Flow:**
 ```text
-Client -> router (Gin) -> Auth Middleware -> Handler -> Service -> Repository -> SQLite Database
-                                                            |
-                                                            v
-                                                       Redis Cache
+Client (React SPA / CLI)
+   -> Gin router
+   -> Recovery -> RequestLogger (slog) -> CORS -> RateLimit (100/300 per min)
+   -> Auth Middleware (JWT, on protected groups)
+   -> Handler -> Service -> Repository -> SQLite (WAL)
+                    |                          ^
+                    v                          |
+              Redis Cache              (services return *AppError;
+                                        handlers map via RespondError)
 ```
 
 ### Real-time Features & Protocols
@@ -145,6 +193,82 @@ Remove-Item .\data\mangahub.db -Force -ErrorAction SilentlyContinue
 # Restart the containers:
 docker-compose up -d
 ```
+---
+
+## Frontend (React SPA)
+
+The frontend is served by nginx on **http://localhost:3000** under Docker
+Compose. For local development with hot reload:
+
+```bash
+cd frontend
+npm install          # first time (uses .npmrc legacy-peer-deps)
+npm run dev          # Vite dev server → http://localhost:5173
+```
+
+The browser app calls the backend at `VITE_API_URL` (default
+`http://localhost:8080`). Other useful scripts:
+
+```bash
+npm run build        # type-check + bundle (runs gen:api as a prebuild step)
+npm run gen:api      # regenerate src/api/schema.d.ts from the Swagger spec
+npm run lint
+```
+
+**Generated API types:** request types are generated from the backend Swagger
+spec via `swagger2openapi` (2.0 → 3.0) then `openapi-typescript`. The output
+`src/api/schema.d.ts` is committed; `npm run build` refreshes it automatically.
+When the API changes, run `cp docs/swagger.json frontend/openapi.json` then
+`npm run gen:api`.
+
+---
+
+## Testing
+
+```bash
+# Backend unit tests
+GOFLAGS=-tags=sqlite_fts5 go test ./...
+
+# Frontend type-check + build
+cd frontend && npm run build
+
+# End-to-end (Playwright) — needs the backend running on :8080
+cd frontend
+npm run test:e2e        # headless (auto-starts the Vite dev server)
+npm run test:e2e:ui     # interactive UI mode
+```
+
+The E2E suite (`frontend/e2e/journey.spec.ts`) walks one user through the full
+journey: **register → login → add to library → update progress → review → chat**,
+then cleans up its test data. CI runs Go tests, the frontend build, a Docker
+smoke test, and the Playwright `e2e` job. See `docs/TESTING.md` for the full
+manual API/CLI test guide.
+
+---
+
+## Screenshots
+
+> Screenshots live in [`img/`](img/) and are generated with the Playwright helper
+> `frontend/e2e/screenshots.spec.ts` (`npm run screenshots`). See
+> [Generating screenshots](#generating-screenshots) below.
+
+| Browse | Manga detail |
+|---|---|
+| ![Browse](img/browse.png) | ![Manga detail](img/manga-detail.png) |
+
+| Library | Chat |
+|---|---|
+| ![Library](img/library.png) | ![Chat](img/chat.png) |
+
+### Generating screenshots
+
+With the backend and frontend running, capture fresh screenshots into `img/`:
+
+```bash
+cd frontend
+npm run screenshots      # drives the app with Playwright and writes img/*.png
+```
+
 ---
 
 ## API Documentation
