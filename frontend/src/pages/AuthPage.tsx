@@ -43,6 +43,7 @@ export default function AuthPage() {
               {(['login', 'register'] as Tab[]).map((t) => (
                 <button
                   key={t}
+                  data-testid={`tab-${t}`}
                   onClick={() => setTab(t)}
                   className={`flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition-all duration-200 ${
                     tab === t
@@ -167,7 +168,7 @@ function LoginForm({ onSuccess, initialUsername = '' }: { onSuccess: () => void;
         <PasswordInput value={password} onChange={setPassword} show={showPw} onToggle={() => setShowPw((v) => !v)} />
       </Field>
 
-      <button type="submit" disabled={loading} className={submitCls}>
+      <button type="submit" disabled={loading} data-testid="submit-login" className={submitCls}>
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
       </button>
     </form>
@@ -252,7 +253,7 @@ function RegisterForm({ onSuccess }: { onSuccess: (username: string) => void }) 
         />
       </Field>
 
-      <button type="submit" disabled={loading} className={submitCls}>
+      <button type="submit" disabled={loading} data-testid="submit-register" className={submitCls}>
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Account'}
       </button>
     </form>

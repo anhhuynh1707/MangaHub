@@ -263,3 +263,14 @@ func (r *Repository) DeleteActivity(activityID string) error {
 
 	return nil
 }
+
+// DeleteActivitiesByUser removes all activities belonging to a user and returns
+// how many were deleted.
+func (r *Repository) DeleteActivitiesByUser(userID string) (int64, error) {
+	result, err := r.db.Exec(`DELETE FROM activities WHERE user_id = ?`, userID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to clear activities: %w", err)
+	}
+	n, _ := result.RowsAffected()
+	return n, nil
+}

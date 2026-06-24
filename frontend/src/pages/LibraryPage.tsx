@@ -275,6 +275,8 @@ function LibraryCard({ progress, manga }: { progress: UserProgress; manga: Manga
           <button
             onClick={() => adjustChapter(-1)}
             disabled={current <= 0 || updateMutation.isPending}
+            data-testid="chapter-decrement"
+            aria-label="Decrease chapter"
             className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--color-border-raw)] bg-[var(--color-surface2)] text-[var(--color-text2)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)] disabled:opacity-40"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -291,6 +293,8 @@ function LibraryCard({ progress, manga }: { progress: UserProgress; manga: Manga
           <button
             onClick={() => adjustChapter(1)}
             disabled={(total > 0 && current >= total) || updateMutation.isPending}
+            data-testid="chapter-increment"
+            aria-label="Increase chapter"
             className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--color-border-raw)] bg-[var(--color-surface2)] text-[var(--color-text2)] transition hover:border-[var(--brand-red)] hover:text-[var(--brand-red)] disabled:opacity-40"
           >
             <ChevronRight className="h-4 w-4" />

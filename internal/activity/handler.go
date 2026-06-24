@@ -332,15 +332,19 @@ func (h *Handler) GetTimelineView(c *gin.Context) {
 
 // ClearActivityFeed handles DELETE /feed/clear
 func (h *Handler) ClearActivityFeed(c *gin.Context) {
-	_, err := auth.GetUserIDFromContext(c)
+	userID, err := auth.GetUserIDFromContext(c)
 	if err != nil {
 		utils.UnauthorizedResponse(c, "Unauthorized")
 		return
 	}
 
-	// This would delete or mark all activities for the user as read
-	// Implementation depends on whether you want to delete or mark as read
-	utils.SuccessResponse(c, "Activity feed cleared", nil)
+	deleted, err := h.service.ClearUserFeed(userID)
+	if err != nil {
+		utils.InternalServerErrorResponse(c, "Failed to clear activity feed")
+		return
+	}
+
+	utils.SuccessResponse(c, "Activity feed cleared", gin.H{"deleted": deleted})
 }
 
 

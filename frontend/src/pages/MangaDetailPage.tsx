@@ -45,6 +45,8 @@ function StarPicker({ value, onChange }: { value: number; onChange: (n: number) 
           <button
             key={n}
             type="button"
+            data-testid={`rating-star-${n}`}
+            aria-label={`Rate ${n} out of 10`}
             onClick={() => onChange(n)}
             onMouseEnter={() => setHover(n)}
             onMouseLeave={() => setHover(0)}

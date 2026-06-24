@@ -172,3 +172,13 @@ func (s *Service) DeleteActivity(userID, activityID string) error {
 	return nil
 }
 
+// ClearUserFeed deletes every activity belonging to the user.
+func (s *Service) ClearUserFeed(userID string) (int64, error) {
+	n, err := s.repo.DeleteActivitiesByUser(userID)
+	if err != nil {
+		return 0, err
+	}
+	s.invalidateActivityCaches()
+	return n, nil
+}
+
