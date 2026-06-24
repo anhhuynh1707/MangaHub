@@ -131,16 +131,39 @@ Client (React SPA / CLI)
 
 ### 2. Environment Configuration
 
-Copy the example environment file and configure it:
+Copy the example environment file, then set a JWT secret:
 
 ```powershell
+# Windows (PowerShell)
 copy .env.example .env
 ```
 
-Ensure the following key variables are set in your `.env` file:
-* `JWT_SECRET`: Change this to a secure random string for production.
+```bash
+# macOS / Linux
+cp .env.example .env
+```
+
+`JWT_SECRET` is **required** — the api/tcp/grpc servers refuse to start without it
+(minimum 16 characters), and `docker compose up` aborts if it is unset. It is never
+committed to git (`.env` is gitignored). Generate a strong random value into `.env`:
+
+```bash
+printf 'JWT_SECRET=%s\n' "$(openssl rand -base64 48)" >> .env
+```
+
+Key variables in your `.env` file:
+* `JWT_SECRET` (**required**): key for signing/validating JWTs. The api, tcp, and grpc
+  services must use the **same** value — they all read this one `.env`, so you only set
+  it once. Keep it private; never commit or share it.
 * `REDIS_ADDR`: Points to `redis:6379` within the Docker network.
 * Service feature flags (`ENABLE_TCP_SERVER`, etc.) are configured automatically via Docker Compose.
+
+> **Running on another machine?** `.env` is gitignored, so it does **not** come with
+> `git clone`. On each new device either generate a fresh secret with the command above
+> (fine when each machine runs its own independent stack), or copy the same `JWT_SECRET`
+> value over securely (needed only if login tokens must be valid across machines / a
+> shared backend). Never transfer it via git, chat, or email. Regenerating the secret
+> simply invalidates existing tokens, so users log in again.
 
 ### 3. Start the Server (Docker Compose)
 

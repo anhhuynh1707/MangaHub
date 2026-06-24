@@ -2,6 +2,8 @@ package auth
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -11,12 +13,27 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-// JWTSecret is the secret key used for signing JWT tokens.
-// In production, this should come from environment variables.
-var JWTSecret = []byte("mangahub-secret-key-change-in-production")
+// JWTSecret is the secret key used for signing and validating JWT tokens.
+// It has no default: call InitSecret at startup to load it from the JWT_SECRET
+// environment variable. This prevents the app from ever running with a weak,
+// publicly-known default key.
+var JWTSecret []byte
 
 // TokenExpiry is how long a JWT token remains valid.
 var TokenExpiry = 24 * time.Hour
+
+// InitSecret loads the JWT signing key from the JWT_SECRET environment variable.
+// It returns an error if the secret is unset or shorter than 16 characters, so
+// each server binary can fail fast instead of silently falling back to a default.
+// Every service that signs or validates tokens must call this with the same secret.
+func InitSecret() error {
+	secret := os.Getenv("JWT_SECRET")
+	if len(secret) < 16 {
+		return fmt.Errorf("JWT_SECRET must be set to at least 16 characters; refusing to start with a default key")
+	}
+	JWTSecret = []byte(secret)
+	return nil
+}
 
 // Claims represents the custom JWT claims.
 type Claims struct {

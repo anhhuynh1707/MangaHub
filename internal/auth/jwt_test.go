@@ -1,9 +1,17 @@
 package auth
 
 import (
+	"os"
 	"testing"
 	"time"
 )
+
+// TestMain sets a fixed signing secret for the whole package's tests. The
+// production default was removed (see InitSecret), so tests must provide their own.
+func TestMain(m *testing.M) {
+	JWTSecret = []byte("test-secret-for-unit-tests-only")
+	os.Exit(m.Run())
+}
 
 func TestGenerateToken_ReturnsNonEmptyString(t *testing.T) {
 	token, err := GenerateToken("user-alice", "alice")

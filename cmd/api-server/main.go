@@ -16,6 +16,7 @@ import (
 	userPkg "mangahub/internal/user"
 	wsPkg "mangahub/internal/websocket"
 	"mangahub/pkg/cache"
+	"mangahub/pkg/config"
 	"mangahub/pkg/database"
 	"mangahub/pkg/logger"
 
@@ -25,7 +26,7 @@ import (
 )
 
 func main() {
-	loadEnvFile(".env")
+	config.LoadDotEnv(".env")
 	logger.Init() // structured JSON logging (reads LOG_LEVEL)
 
 	// --- Configuration ---
@@ -34,8 +35,9 @@ func main() {
 	tcpPort := envOr("TCP_PORT", "9090")
 	udpPort := envOr("UDP_PORT", "9091")
 	grpcPort := envOr("GRPC_PORT", "9092")
-	if jwtSecret := os.Getenv("JWT_SECRET"); jwtSecret != "" {
-		auth.JWTSecret = []byte(jwtSecret)
+	if err := auth.InitSecret(); err != nil {
+		slog.Error("failed to load JWT secret", "error", err)
+		os.Exit(1)
 	}
 	if ginMode := os.Getenv("GIN_MODE"); ginMode != "" {
 		gin.SetMode(ginMode)

@@ -42,6 +42,7 @@ services:
       - UDP_PORT=mangahub-udp:9091
       - GRPC_PORT=mangahub-grpc:9092
       - DB_PATH=/app/data/mangahub.db
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env or the environment}
       - GIN_MODE=release
       - LOG_FORMAT=json
       - ENABLE_TCP_SERVER=false
@@ -72,6 +73,7 @@ services:
     environment:
       - TCP_PORT=9090
       - DB_PATH=/app/data/mangahub.db
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env or the environment}
     restart: unless-stopped
 
   # ── UDP Notifications ────────────────────────────────────────────
@@ -98,6 +100,7 @@ services:
     environment:
       - GRPC_PORT=9092
       - DB_PATH=/app/data/mangahub.db
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env or the environment}
     restart: unless-stopped
 
 volumes:

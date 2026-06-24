@@ -4,13 +4,20 @@ import (
 	"log"
 	"os"
 
+	"mangahub/internal/auth"
 	grpcServer "mangahub/internal/grpc"
 	mangaPkg "mangahub/internal/manga"
 	userPkg "mangahub/internal/user"
+	"mangahub/pkg/config"
 	"mangahub/pkg/database"
 )
 
 func main() {
+	config.LoadDotEnv(".env")
+	if err := auth.InitSecret(); err != nil {
+		log.Fatalf("JWT secret error: %v", err)
+	}
+
 	port := os.Getenv("GRPC_PORT")
 	if port == "" {
 		port = "9092"
