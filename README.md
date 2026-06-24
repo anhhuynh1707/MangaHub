@@ -248,26 +248,41 @@ manual API/CLI test guide.
 
 ## Screenshots
 
-> Screenshots live in [`img/`](img/) and are generated with the Playwright helper
-> `frontend/e2e/screenshots.spec.ts` (`npm run screenshots`). See
-> [Generating screenshots](#generating-screenshots) below.
+Sign in / register
 
-| Browse | Manga detail |
-|---|---|
-| ![Browse](img/browse.png) | ![Manga detail](img/manga-detail.png) |
+![Auth](img/auth.png)
 
-| Library | Chat |
-|---|---|
-| ![Library](img/library.png) | ![Chat](img/chat.png) |
+Browse manga
 
-### Generating screenshots
+![Browse](img/browse.png)
 
-With the backend and frontend running, capture fresh screenshots into `img/`:
+Manga detail
 
-```bash
-cd frontend
-npm run screenshots      # drives the app with Playwright and writes img/*.png
-```
+![Manga detail](img/manga-detail.png)
+
+My library
+
+![Library](img/library.png)
+
+Real-time chat
+
+![Chat](img/chat.png)
+
+Activity feed
+
+![Feed](img/feed.png)
+
+Profile
+
+![Profile](img/profile.png)
+
+> Screenshots live in [`img/`](img/). To regenerate them with the backend and
+> frontend running:
+>
+> ```bash
+> cd frontend
+> npm run screenshots      # Playwright drives the app and writes img/*.png
+> ```
 
 ---
 
