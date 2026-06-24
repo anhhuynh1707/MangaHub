@@ -105,6 +105,8 @@ jobs:
       - name: Build & start backend
         run: |
           go build -tags=sqlite_fts5 -o /tmp/api ./cmd/api-server
+          # CI-only throwaway signing secret (the e2e DB at /tmp/e2e.db is ephemeral)
+          export JWT_SECRET=$(openssl rand -base64 48)
           ENABLE_TCP_SERVER=false ENABLE_UDP_SERVER=false ENABLE_GRPC_SERVER=false \
             REDIS_ADDR=localhost:6399 DB_PATH=/tmp/e2e.db PORT=8080 \
             GIN_MODE=release LOG_LEVEL=error /tmp/api &
@@ -152,6 +154,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Generate CI JWT secret
+        # docker-compose now requires JWT_SECRET; a throwaway value lets the
+        # smoke test run. Containers + volumes are torn down at the end.
+        run: echo "JWT_SECRET=$(openssl rand -base64 48)" >> "$GITHUB_ENV"
 
       - name: Build all Docker images
         run: docker compose build
