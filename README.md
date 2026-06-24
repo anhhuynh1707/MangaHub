@@ -248,19 +248,23 @@ manual API/CLI test guide.
 
 ## Screenshots
 
-Sign in / register
+Sign in
 
-![Auth](img/auth.png)
+![Sign in](img/auth.png)
+
+Register
+
+![Register](img/register.png)
 
 Browse manga
 
 ![Browse](img/browse.png)
 
-Manga detail
+Manga detail & reviews
 
 ![Manga detail](img/manga-detail.png)
 
-My library
+My library (reading progress)
 
 ![Library](img/library.png)
 
@@ -275,6 +279,18 @@ Activity feed
 Profile
 
 ![Profile](img/profile.png)
+
+Profile — activity timeline
+
+![Profile activity](img/profile-activity.png)
+
+Friends (add by username, requests, list)
+
+![Friends](img/friends.png)
+
+Change password
+
+![Change password](img/change-password.png)
 
 > Screenshots live in [`img/`](img/). To regenerate them with the backend and
 > frontend running:

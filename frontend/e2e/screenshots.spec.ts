@@ -23,6 +23,7 @@ test('capture README screenshots', async ({ page, request }) => {
   await page.getByPlaceholder('Your username').fill(username)
   await page.getByPlaceholder('Your password', { exact: true }).fill(password)
   await page.getByPlaceholder('Repeat your password').fill(password)
+  await page.screenshot({ path: shot('register') })
   await page.getByTestId('submit-register').click()
   // Wait for the login form to finish entering (AnimatePresence) before filling.
   await expect(page.getByTestId('submit-login')).toBeVisible()
@@ -58,12 +59,21 @@ test('capture README screenshots', async ({ page, request }) => {
   }
   await page.screenshot({ path: shot('browse') })
 
-  // Manga detail — open it and add it to the library.
+  // Manga detail — add to library and leave a review so the review section shows.
   await page.goto(mangaId.startsWith('/') ? mangaId : `/manga/${mangaId}`)
   await page.waitForTimeout(600)
   const addBtn = page.getByRole('button', { name: 'Add to Library' })
   if (await addBtn.isVisible().catch(() => false)) await addBtn.click()
-  await page.waitForTimeout(300)
+
+  const writeBtn = page.getByRole('button', { name: 'Write a review' })
+  if (await writeBtn.isVisible().catch(() => false)) {
+    await writeBtn.click()
+    await page.getByTestId('rating-star-9').click()
+    await page.getByPlaceholder('Share your thoughts about this manga…')
+      .fill('Loved the pacing and the art — highly recommend this one!')
+    await page.getByRole('button', { name: 'Submit Review' }).click()
+    await page.waitForTimeout(600)
+  }
   await page.screenshot({ path: shot('manga-detail') })
 
   // Library
@@ -84,4 +94,19 @@ test('capture README screenshots', async ({ page, request }) => {
   await page.goto('/profile')
   await page.waitForTimeout(500)
   await page.screenshot({ path: shot('profile') })
+
+  // Profile → Activity tab
+  await page.getByRole('button', { name: 'Activity' }).click().catch(() => {})
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: shot('profile-activity') })
+
+  // Profile → Friends tab (friend system: add-by-username autocomplete + lists)
+  await page.getByRole('button', { name: /Friends/ }).click().catch(() => {})
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: shot('friends') })
+
+  // Change password page
+  await page.goto('/change-password')
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: shot('change-password') })
 })
