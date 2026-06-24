@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import { useNotificationStore, type ServerNotification } from '@/store/notificationStore'
-import { notify } from '@/lib/notify'
+import { showEventToast } from '@/lib/eventToast'
 
 // The SSE envelope mirrors internal/sse/hub.go Event.
 interface ServerEvent {
@@ -55,7 +55,11 @@ export function useServerEvents() {
       if (event.type === 'notification') {
         const data = event.data as ServerNotification
         addNotification(data)
-        notify.info(data.title || 'New notification', data.message)
+        showEventToast({
+          type: data.type,
+          title: data.title || 'New notification',
+          message: data.message,
+        })
       } else if (event.type === 'progress') {
         const data = event.data as ProgressData
         // Don't notify users about their own reading activity.
@@ -63,7 +67,11 @@ export function useServerEvents() {
           queryClient.invalidateQueries({ queryKey: ['feed'] })
           return
         }
-        notify.info('Reading activity', `${data.username} read a manga → ch. ${data.chapter}`)
+        showEventToast({
+          type: 'progress',
+          title: 'Reading activity',
+          message: `${data.username} read a manga → ch. ${data.chapter}`,
+        })
         queryClient.invalidateQueries({ queryKey: ['feed'] })
       }
     }
