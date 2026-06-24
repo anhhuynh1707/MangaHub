@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { BookOpen, Menu, LogOut, User, KeyRound } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { NotificationBell } from './NotificationBell'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { authApi } from '@/api/auth'
@@ -50,6 +51,7 @@ export function Navbar() {
       {/* Auth controls */}
       {isAuthenticated ? (
         <div className="flex items-center gap-2">
+          <NotificationBell />
           <Link
             to="/profile"
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--color-text2)] hover:bg-[var(--color-surface2)] no-underline"

@@ -62,6 +62,7 @@ MangaHub operates using a multi-protocol approach, featuring both a monolithic H
 - `internal/tcp` - TCP synchronization server logic
 - `internal/udp` - UDP notification server logic
 - `internal/websocket` - WebSocket chat hub and handler
+- `internal/sse` - Server-Sent Events hub (bridges UDP/TCP events to the browser)
 - `internal/grpc` - gRPC service implementation
 - `pkg/cache` - Redis client wrapper
 - `pkg/database` - SQLite store and repositories
@@ -73,10 +74,10 @@ MangaHub operates using a multi-protocol approach, featuring both a monolithic H
 
 **Frontend (`frontend/`)**
 - `src/pages` - route pages (Browse, Manga detail, Library, Chat, Feed, Profile, Auth)
-- `src/components` - UI + layout (Navbar, Sidebar, ErrorBoundary, FriendsPanel, …)
+- `src/components` - UI + layout (Navbar, Sidebar, NotificationBell, ErrorBoundary, FriendsPanel, …)
 - `src/api` - axios client + per-domain API modules + generated `schema.d.ts`
-- `src/hooks` - `useChat` (WebSocket), `useDebounce`
-- `src/store` - Zustand stores (`authStore`, `uiStore`)
+- `src/hooks` - `useChat` (WebSocket), `useServerEvents` (SSE live events), `useDebounce`
+- `src/store` - Zustand stores (`authStore`, `uiStore`, `notificationStore`)
 - `src/lib` - `notify` (Sonner toast helper)
 - `e2e` - Playwright end-to-end tests
 
@@ -112,6 +113,7 @@ Client (React SPA / CLI)
 3. **UDP Notifications (`:9091`)**: A lightweight push notification system for broadcasting system events or chapter updates to active clients.
 4. **WebSocket ChatHub (`:8080/ws/chat`)**: Multi-room chat support enabling real-time discussion across the entire platform or within specific manga rooms.
 5. **gRPC Server(`:9092`)**: Exposes internal manga and progress methods for inter-service communication.
+6. **SSE Browser Bridge (`:8080/events/stream`)**: Browsers can't open raw TCP/UDP sockets, so the API server bridges UDP notifications and TCP progress updates to the React SPA over **Server-Sent Events**. This is **not a new port** — it's one extra HTTP route on `:8080` that fans out the same events the API already produces (the TCP/UDP servers and the CLI are untouched), giving the SPA live toasts, a notification bell, and a live activity feed.
 
 ### Data Storage & Caching
 
@@ -220,6 +222,13 @@ spec via `swagger2openapi` (2.0 → 3.0) then `openapi-typescript`. The output
 `src/api/schema.d.ts` is committed; `npm run build` refreshes it automatically.
 When the API changes, run `cp docs/swagger.json frontend/openapi.json` then
 `npm run gen:api`.
+
+**Live events (SSE):** once logged in, the SPA opens an `EventSource` to
+`/events/stream` (`src/hooks/useServerEvents.ts`, mounted in `PageShell`). UDP
+notifications surface as Sonner toasts + a navbar **notification bell** with an
+unread badge; TCP progress updates surface as a live "reading activity" toast and
+refresh the activity feed. See **[docs/TESTING.md](docs/TESTING.md) § S24** for a
+click-by-click browser test (and the curl-only equivalent).
 
 ---
 
@@ -380,7 +389,7 @@ Below is a summary of the available HTTP REST API endpoints. For the details, pl
 | `/reading-lists/subscribed` | `GET` | View all subscribed lists |
 | `/reading-lists/:list_id/subscribe` | `DELETE` | Unsubscribe from a list |
 
-### Real-time Features (TCP/UDP/WS)
+### Real-time Features (TCP/UDP/WS/SSE)
 
 | Endpoint | Method | Description |
 |---|---|---|
@@ -389,6 +398,7 @@ Below is a summary of the available HTTP REST API endpoints. For the details, pl
 | `/ws/chat` | `GET` | WebSocket connection endpoint for real-time chat |
 | `/chat/history` | `GET` | Retrieve previous chat history logs |
 | `/notify/broadcast` | `POST` | Broadcast system or release notifications |
+| `/events/stream` | `GET` | SSE stream that bridges UDP notifications & TCP progress to the browser (`?token=<jwt>`; same `:8080` port, no new listener) |
 
 ### System Health & Data Management
 

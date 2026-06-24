@@ -63,6 +63,14 @@ func (s *APIServer) UpdateProgress(c *gin.Context) {
 	if s.GRPCMangaServer != nil {
 		s.GRPCMangaServer.EventHub.PublishProgressUpdate(userID, mangaID, int32(chapter))
 	}
+
+	// Bridge the same progress update to browser clients over SSE (Phase 2).
+	s.SSE.Publish("progress", gin.H{
+		"user_id":  userID,
+		"username": c.GetString("username"),
+		"manga_id": mangaID,
+		"chapter":  chapter,
+	})
 }
 
 // SyncStatus reports the TCP progress-sync server status.

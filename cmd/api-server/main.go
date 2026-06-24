@@ -12,6 +12,7 @@ import (
 	"mangahub/internal/recommendation"
 	"mangahub/internal/review"
 	"mangahub/internal/sharedlist"
+	"mangahub/internal/sse"
 	userPkg "mangahub/internal/user"
 	wsPkg "mangahub/internal/websocket"
 	"mangahub/pkg/cache"
@@ -79,6 +80,7 @@ func main() {
 		Database:          db,
 		Cache:             redisCache,
 		Hub:               wsPkg.NewChatHub(),
+		SSE:               sse.NewHub(),
 		MangaService:      mangaService,
 		UserService:       userService,
 		RecService:        recService,
@@ -105,6 +107,7 @@ func main() {
 	startTCP(s, enableTCP, userService)
 	startUDP(s, enableUDP)
 	go s.Hub.Run()
+	go s.SSE.Run()
 	startGRPC(s, enableGRPC, mangaService, userService)
 
 	// Seed in the background so the API listens immediately (see seedDatabase).

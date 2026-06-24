@@ -64,15 +64,16 @@ func (s *store) cleanup() {
 }
 
 // Middleware applies tiered per-IP rate limiting. Requests carrying an
-// Authorization header use authPerMin; all others use publicPerMin. Health and
-// swagger endpoints are exempt so monitoring/healthchecks are never throttled.
+// Authorization header use authPerMin; all others use publicPerMin. Health,
+// swagger and the long-lived SSE stream (/events) are exempt so monitoring,
+// healthchecks and live event streams are never throttled.
 func Middleware(publicPerMin, authPerMin int) gin.HandlerFunc {
 	public := newStore(publicPerMin)
 	authed := newStore(authPerMin)
 
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if strings.HasPrefix(path, "/health") || strings.HasPrefix(path, "/swagger") {
+		if strings.HasPrefix(path, "/health") || strings.HasPrefix(path, "/swagger") || strings.HasPrefix(path, "/events") {
 			c.Next()
 			return
 		}

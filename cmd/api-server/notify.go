@@ -39,6 +39,10 @@ func (s *APIServer) NotifyBroadcast(c *gin.Context) {
 		sent = s.UDPServer.BroadcastNotification(notif)
 	}
 
+	// Bridge the same notification to browser clients over SSE (browsers can't
+	// speak raw UDP). The CLI UDP subscribers above are unaffected.
+	s.SSE.Publish("notification", notif)
+
 	utils.SuccessResponse(c, fmt.Sprintf("Notification sent to %d clients", sent), gin.H{
 		"type":       req.Type,
 		"sent_count": sent,

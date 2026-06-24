@@ -3,10 +3,15 @@ import { Navbar } from './Navbar'
 import { Sidebar } from './Sidebar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useAuthStore } from '@/store/authStore'
+import { useServerEvents } from '@/hooks/useServerEvents'
 
 export function PageShell() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const { pathname } = useLocation()
+
+  // Bridge live SSE events (notifications + reading activity) into the SPA.
+  // No-op until authenticated (the hook keys off the auth token).
+  useServerEvents()
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">

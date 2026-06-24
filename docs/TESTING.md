@@ -1396,6 +1396,18 @@ $env:MANGAHUB_PROFILE = "bob"
 | UDP Delivery Confirmation — ACK system (5 pts) | Done |
 | gRPC Server-side Streaming (10 pts) | Done |
 
+### SSE Browser Event Bridge (live notifications & activity for the SPA)
+| Feature | Test Section | Status |
+|---------|-------------|--------|
+| internal/sse/hub.go (broadcast hub + Run loop) | -- | Done |
+| GET /events/stream (token auth, same :8080 port) | S24.1 | Done |
+| notification event published from /notify/broadcast | S24.1 | Done |
+| progress event published from /users/progress | S24.1 | Done |
+| /events exempt from rate limiter | S24.1 | Done |
+| Browser: toast + notification bell (UDP path) | S24.2 | Done |
+| Browser: live activity toast + feed refresh (TCP path) | S24.2 | Done |
+| EventSource auto-reconnect after backend restart | S24.2 | Done |
+
 ### Data Export/Import (10 points)
 | Feature | Test Section | Status |
 |---------|-------------|--------|
@@ -1840,6 +1852,92 @@ grpcurl -plaintext \
   -d '{"manga_id":"one-piece","user_id":"user-alice"}' \
   localhost:9092 mangahub.MangaService/WatchMangaUpdates
 ```
+
+---
+
+## S24. SSE Browser Event Bridge (Live Notifications & Activity)
+
+The SPA can't speak raw TCP/UDP, so the API server bridges UDP notifications and
+TCP progress updates to the browser over **Server-Sent Events**. This is **not a
+new port** — it's one extra route, `GET /events/stream`, on the existing API
+port `:8080`. The TCP/UDP servers and the CLI are unaffected.
+
+### S24.1 Verify the stream with curl (no browser needed)
+
+```bash
+# Save a token first (see §1 Setup): export ALICE_TOKEN=...
+
+# Terminal A — open the stream and leave it running (it stays connected):
+curl -N "http://localhost:8080/events/stream?token=$ALICE_TOKEN"
+#   You should immediately get a 200; every ~25s a ": ping" keepalive comment appears.
+
+# Terminal B — fire a notification (the UDP broadcast path):
+curl -s -X POST http://localhost:8080/notify/broadcast \
+  -H "Authorization: Bearer $ALICE_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"type":"new_chapter","manga_id":"one-piece","message":"Chapter 1100 is out!"}'
+
+# → Terminal A prints (one line):
+# data: {"type":"notification","data":{"type":"new_chapter","manga_id":"one-piece",
+#        "message":"Chapter 1100 is out!","timestamp":...},"timestamp":...}
+
+# Terminal B — bump a chapter (the TCP/gRPC progress path). The manga must be in
+# your library first (POST /users/library), then:
+curl -s -X PUT http://localhost:8080/users/progress \
+  -H "Authorization: Bearer $ALICE_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"manga_id":"one-piece","current_chapter":42,"status":"reading"}'
+
+# → Terminal A prints:
+# data: {"type":"progress","data":{"chapter":42,"manga_id":"one-piece",
+#        "user_id":"user-alice","username":"alice"},"timestamp":...}
+```
+
+**Auth checks (should both fail):**
+
+```bash
+curl -i "http://localhost:8080/events/stream"               # → 401 (missing token)
+curl -i "http://localhost:8080/events/stream?token=garbage" # → 401 (invalid token)
+```
+
+> Note: `POST /notify/broadcast` may report `"sent to 0 clients"` — that count is
+> the **UDP CLI** subscribers, which is independent of the SSE bridge. The browser
+> still gets the event over SSE. To exercise the CLI side too, run
+> `mangahub notify subscribe` in another terminal before broadcasting.
+
+### S24.2 Test it in the browser (what to click and what you should see)
+
+**Prerequisites:** backend on `:8080`, frontend running
+(`cd frontend && npm run dev` → `:5173`, or the Docker frontend on `:3000`).
+
+1. Open the app and **log in** (e.g. as `alice`). The navbar now shows a 🔔 **bell**
+   icon next to your username.
+2. **Notifications (UDP path).** In a terminal, fire the broadcast curl from
+   S24.1 (with alice's token). In the browser you should immediately see:
+   - a **toast** (top-right) with the message text, and
+   - the **bell's red unread badge** increment. Click the bell → a dropdown lists
+     the notification; opening it clears the unread count. "Clear" empties the list.
+3. **Live activity (TCP path).** Open the app in **two browsers** (or a normal +
+   an incognito window) logged in as **two different users** (alice and bob). As
+   **bob**, go to the **Library** page and bump a chapter on any manga in his
+   library. In **alice's** window you should see a "Reading activity" toast
+   (`bob read a manga → ch. N`), and if alice is on the **Feed** page it refreshes
+   live (the `['feed']` query is invalidated). You don't get toasted by your own
+   progress updates.
+4. **Auto-reconnect.** With the app open, restart the backend
+   (`Ctrl+C` then `go run ./cmd/api-server/`). In the browser **DevTools →
+   Network**, filter to `stream`: the `events/stream` request shows `pending`,
+   drops when the server stops, and **re-establishes on its own** once the backend
+   is back (EventSource reconnects automatically). Fire another broadcast to
+   confirm events still arrive.
+
+### S24.3 Troubleshooting
+
+| Symptom | Likely cause / fix |
+|---|---|
+| No toast, no bell change | Not logged in (the stream only opens when authenticated), or the browser is pointed at the wrong API. Check `VITE_API_URL`. |
+| `events/stream` is 401 | Token missing/expired — log out and back in. |
+| Stream works in curl but not the browser | CORS: the API allows the SPA origin via `corsOrigins()`; make sure the frontend origin (`:5173` / `:3000`) is allowed. |
+| Stream drops after ~30–60s behind a proxy | Proxy buffering — the handler sets `X-Accel-Buffering: no`; ensure your proxy honours it (nginx does). The 25s `: ping` keepalive also helps. |
+| Progress event never fires | The manga must be in your library first (`POST /users/library`), and the chapter must be `> 0`. |
 
 ---
 

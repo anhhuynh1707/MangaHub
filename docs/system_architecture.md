@@ -24,6 +24,7 @@ graph TD
             Middleware["Middleware chain:<br/>Recovery → RequestLogger (slog) →<br/>CORS → RateLimit (100/300 per min)"]
             Auth["Auth Middleware (JWT)"]
             WS["WebSocket ChatHub"]
+            SSE["SSE Bridge (GET /events/stream)<br/>same :8080 port — no new listener"]
             
             subgraph InternalLogic ["Business Logic (internal/*)"]
                 Handlers["Handlers (REST) → utils.RespondError"]
@@ -48,6 +49,7 @@ graph TD
 
     %% Client Interactions
     Frontend -- "HTTP REST + WebSocket" --> Router
+    Frontend -- "SSE (live events, EventSource)" --> SSE
     E2E -- "drives" --> Frontend
     CLI -- "HTTP REST" --> Router
     CLI -- "WebSocket" --> WS
@@ -69,6 +71,9 @@ graph TD
     TCPServer -- "Persist progress" --> SQLite
     GRPCServer -- "Direct DB Access" --> SQLite
     APIServer -- "Internal RPC" --> GRPCServer
+
+    %% SSE bridge: in-process tap of the same events the API already produces
+    Handlers -- "publish notification (UDP tap)<br/>publish progress (TCP/gRPC tap)" --> SSE
 
     classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px;
     classDef database fill:#ffefc2,stroke:#d9a300,stroke-width:2px;
@@ -106,6 +111,38 @@ graph TD
 - **SQLite** is opened with `WAL` + a busy timeout + foreign keys on; the
   first-run MangaDex seed runs in a background goroutine so the API listens
   immediately.
+
+## SSE browser event bridge (live notifications & activity)
+
+Browsers **cannot open raw TCP/UDP sockets** — only HTTP, WebSocket, and SSE — so
+the React SPA can't connect to the TCP progress server (`:9090`) or the UDP
+notification server (`:9091`) the way the CLI does. It doesn't need to: the API
+server is already the producer of both event streams. A thin **Server-Sent
+Events** bridge taps those in-process call-sites and fans the same events out to
+browsers.
+
+- **No new port, no new listener.** The bridge is a single extra HTTP route,
+  `GET /events/stream?token=<jwt>`, served on the **existing API port `:8080`**.
+  SSE is just a long-lived HTTP response. The TCP/UDP/gRPC servers and the CLI
+  are **untouched** — this only adds a browser projection of events the API
+  already has.
+- **Hub** (`internal/sse/hub.go`): a channel-based Register/Unregister/Broadcast
+  hub with a `Run()` goroutine, modelled on the chat `ChatHub` but simpler
+  (broadcast-to-all, no rooms). `Hub.Publish(type, data)` is a non-blocking
+  helper; slow clients are dropped rather than stalling the request handler.
+- **Taps:** `NotifyBroadcast` (`notify.go`) publishes a `notification` event
+  after the UDP send; `UpdateProgress` (`sync.go`) publishes a `progress` event
+  after the TCP/gRPC broadcast. `notification` reuses the `udp.Notification`
+  shape so CLI and browser see identical payloads.
+- **Auth & rate limiting:** the handler validates the JWT from `?token=` itself
+  (EventSource can't set an `Authorization` header — same pattern as `/ws/chat`);
+  `/events` is exempt from the per-IP rate limiter so the long-lived stream is
+  never throttled.
+- **Frontend:** `useServerEvents` (mounted once in `PageShell`) opens an
+  `EventSource` (auto-reconnecting) and routes `notification` events to a Sonner
+  toast + a Zustand `notificationStore` + the navbar `NotificationBell`, and
+  `progress` events to a toast + `invalidateQueries(['feed'])` so the activity
+  feed updates live.
 
 ## Frontend & testing
 

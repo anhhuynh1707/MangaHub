@@ -10,6 +10,7 @@ import (
 	"mangahub/internal/recommendation"
 	"mangahub/internal/review"
 	"mangahub/internal/sharedlist"
+	"mangahub/internal/sse"
 	"mangahub/internal/tcp"
 	"mangahub/internal/udp"
 	userPkg "mangahub/internal/user"
@@ -34,6 +35,7 @@ type APIServer struct {
 	UDPClient       *udp.NotificationClient
 	GRPCMangaServer *grpcServer.MangaServer
 	Hub             *wsPkg.ChatHub
+	SSE             *sse.Hub
 	UseClients      bool
 
 	// Cache + business services

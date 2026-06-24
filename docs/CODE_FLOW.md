@@ -4240,4 +4240,196 @@ If a client is running mangahub notify subscribe:
 ```
 
 ---
+
+## 21. SSE Browser Event Bridge (Live Notifications & Activity)
+
+> **Why this exists:** Browsers **cannot open raw TCP or UDP sockets** — only
+> HTTP, WebSocket, and SSE. So the React SPA can't connect to the TCP progress
+> server (`:9090`) or the UDP notification server (`:9091`) the way the CLI does.
+> It doesn't need to: the **API server is already the producer of both event
+> types** (`NotifyBroadcast` sends UDP; `UpdateProgress` forwards TCP/gRPC). The
+> SSE bridge taps those **in-process call sites** and fans the same events out to
+> browsers over **Server-Sent Events** — a long-lived HTTP response.
+>
+> **No new port and no new listener.** SSE rides the existing API port
+> (`:8080`) as one extra route, `GET /events/stream`. The TCP/UDP/gRPC servers
+> and the CLI are completely untouched — this only adds a browser projection of
+> events the API server already has.
+
+### 21.1 Architecture Overview
+
+```
+   UDP notify (POST /notify/broadcast)        TCP progress (PUT /users/progress)
+            │                                          │
+            ▼                                          ▼
+   cmd/api-server/notify.go                   cmd/api-server/sync.go
+     s.UDPServer.Broadcast… (CLI, unchanged)    s.TCPServer.SendProgressUpdate (CLI, unchanged)
+     s.SSE.Publish("notification", notif) ◄─┐    s.GRPCMangaServer.EventHub.Publish… (unchanged)
+                                            │    s.SSE.Publish("progress", {…}) ◄─┐
+                                            │                                     │
+                                            └──────────────┬──────────────────────┘
+                                                           ▼
+                                          internal/sse/hub.go  ── Hub.Run() goroutine
+                                            Register / Unregister / Broadcast chans
+                                            clients map[*Client]bool (broadcast-to-all)
+                                                           │
+                                                           ▼ per-client buffered chan
+                                          cmd/api-server/events.go  ── EventStream handler
+                                            GET /events/stream?token=<jwt>  (HTTP, :8080)
+                                            c.Stream → writes  data: <json>\n\n
+                                                           │
+                                                           ▼  (browser EventSource, auto-reconnect)
+                                          frontend/src/hooks/useServerEvents.ts
+                                            notification → Sonner toast + notificationStore + bell
+                                            progress     → toast + invalidate ['feed'] query
+```
+
+**Key files:**
+
+| File | Purpose |
+|------|---------|
+| `internal/sse/hub.go` | `Hub` (Register/Unregister/Broadcast chans + `Run()` goroutine), `Event` envelope, `Publish()` helper, `ClientCount()` |
+| `cmd/api-server/events.go` | `EventStream` gin handler — token auth, SSE headers, `c.Stream` loop, 25s keepalive |
+| `cmd/api-server/server.go` | `SSE *sse.Hub` field on `APIServer` |
+| `cmd/api-server/main.go` | `SSE: sse.NewHub()` + `go s.SSE.Run()` |
+| `cmd/api-server/routes.go` | `r.GET("/events/stream", s.EventStream)` (public router) |
+| `cmd/api-server/notify.go` | `s.SSE.Publish("notification", notif)` after the UDP broadcast |
+| `cmd/api-server/sync.go` | `s.SSE.Publish("progress", {…})` after the TCP/gRPC broadcast |
+| `pkg/ratelimit/ratelimit.go` | `/events` added to the exempt-prefix list (long-lived stream is never throttled) |
+| `frontend/src/hooks/useServerEvents.ts` | Opens `EventSource`, routes events to toasts / store / query invalidation |
+| `frontend/src/store/notificationStore.ts` | Zustand store: `items`, `unread`, `add`, `markAllRead`, `clear` |
+| `frontend/src/components/layout/NotificationBell.tsx` | Bell icon + unread badge + dropdown |
+| `frontend/src/components/layout/PageShell.tsx` | Mounts `useServerEvents()` once for the whole authed shell |
+
+### 21.2 Event Envelope
+
+```go
+// internal/sse/hub.go
+type Event struct {
+    Type      string `json:"type"`      // "notification" | "progress"
+    Data      any    `json:"data"`
+    Timestamp int64  `json:"timestamp"` // unix seconds
+}
+```
+
+Wire format on the stream (one event per `data:` line, blank line terminates):
+
+```
+data: {"type":"notification","data":{"type":"new_chapter","manga_id":"one-piece","message":"Chapter 1100 is out!","timestamp":1782279274},"timestamp":1782279274}
+
+data: {"type":"progress","data":{"chapter":42,"manga_id":"one-piece","user_id":"user-alice","username":"alice"},"timestamp":1782279333}
+
+: ping
+```
+
+- `notification.data` reuses the **`udp.Notification`** shape (`type`,
+  `manga_id`, `title`, `message`, `timestamp`) so the browser and the CLI UDP
+  subscriber see identical payloads.
+- `progress.data` = `{ user_id, username, manga_id, chapter }` (username from
+  `c.GetString("username")`).
+- `: ping` is a keepalive comment line emitted every 25s so idle connections
+  (and proxies) don't time the stream out. Browsers ignore comment lines.
+
+### 21.3 Hub (`internal/sse/hub.go`)
+
+```
+NewHub() → Hub{ clients, Register, Unregister, Broadcast(buffered 64) }
+
+Run()   (single goroutine — sole owner of the clients map)
+  for {
+    select {
+      case c := <-Register:   clients[c] = true
+      case c := <-Unregister: delete(clients, c); close(c.Send)
+      case ev := <-Broadcast: for c := range clients {
+                                select { case c.Send <- ev:   // deliver
+                                         default: }            // drop for a slow client, never stall
+                              }
+    }
+  }
+
+Publish(type, data)  → non-blocking send of Event{type,data,now} onto Broadcast
+                       (select/default: drops rather than blocking the request handler)
+```
+
+**Broadcast-to-all** mirrors UDP semantics — "new chapter" and "who read what"
+go to every connected browser. Per-user filtering (e.g. only friends' activity)
+can come later by keying the hub by user.
+
+### 21.4 Stream Handler (`cmd/api-server/events.go`)
+
+```
+GET /events/stream?token=<jwt>            (public route — NOT behind AuthMiddleware)
+  │
+  │ token := c.Query("token")             // EventSource can't set an Authorization
+  │ if token == "":      401 "Missing token query parameter"   //  header, so the JWT
+  │ if !ValidateToken(): 401 "Invalid or expired token"        //  travels in the query
+  │                                                            //  (same approach as /ws/chat)
+  │ client := &sse.Client{Send: make(chan Event, 16)}
+  │ s.SSE.Register <- client
+  │ defer s.SSE.Unregister <- client       // cleanup on disconnect
+  │
+  │ headers: Content-Type: text/event-stream
+  │          Cache-Control: no-cache
+  │          Connection: keep-alive
+  │          X-Accel-Buffering: no         // disable nginx proxy buffering
+  │
+  │ keepalive := time.NewTicker(25s)
+  │ c.Stream(func(w) bool {                // gin auto-flushes after each return
+  │   select {
+  │     case ev := <-client.Send:  write "data: <json>\n\n"; return true
+  │     case <-keepalive.C:        write ": ping\n\n";       return true
+  │     case <-c.Request.Context().Done(): return false      // client went away
+  │   }
+  │ })
+```
+
+### 21.5 Publish Sites (the taps — existing flows are unchanged)
+
+```
+POST /notify/broadcast → NotifyBroadcast (cmd/api-server/notify.go)
+  │ notif := udp.Notification{Type, MangaID, Message, Timestamp}
+  │ … existing UDP broadcast to CLI subscribers (UNCHANGED) …
+  └ s.SSE.Publish("notification", notif)     ◄── NEW: browser bridge
+
+PUT /users/progress → UpdateProgress (cmd/api-server/sync.go)
+  │ … existing TCP SendProgressUpdate + gRPC EventHub.PublishProgressUpdate (UNCHANGED) …
+  └ s.SSE.Publish("progress", gin.H{
+        "user_id":  userID, "username": c.GetString("username"),
+        "manga_id": mangaID, "chapter": chapter })   ◄── NEW: browser bridge
+```
+
+### 21.6 Frontend Consumption
+
+```
+PageShell (authed shell) ─ mounts ─► useServerEvents()      // frontend/src/hooks
+  │ if no token → no-op
+  │ new EventSource(`${VITE_API_URL}/events/stream?token=<token>`)   // auto-reconnects
+  │
+  │ onmessage:
+  │   type "notification" → notificationStore.add(data)
+  │                         notify.info(title || "New notification", message)   // Sonner toast
+  │                         → NotificationBell badge increments
+  │   type "progress"     → if data.user_id === me: just invalidate ['feed']
+  │                         else: notify.info("Reading activity", "<user> read … → ch. N")
+  │                               + invalidate ['feed']  → FeedPage refreshes live
+  │
+  └ cleanup: source.close() on logout / unmount
+```
+
+> **EventSource vs the chat WebSocket:** `EventSource` reconnects on its own, so
+> `useServerEvents` needs none of the manual backoff/`stopped`-flag discipline
+> that `useChat` has. It just opens when authenticated and closes on
+> logout/unmount.
+
+### 21.7 Security & Rate Limiting
+
+- **Auth:** the handler validates the JWT from `?token=` itself (the route is on
+  the public router). Missing/invalid token → `401`. Same query-token pattern as
+  `/ws/chat` (EventSource, like the browser WebSocket, can't send an
+  `Authorization` header).
+- **Rate limiting:** `/events` is in the exempt-prefix list in
+  `pkg/ratelimit/ratelimit.go` (alongside `/health` and `/swagger`) so a
+  long-lived stream is never counted against the per-IP token bucket.
+
+---
 **End of Documentation.**

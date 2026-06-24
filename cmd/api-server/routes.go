@@ -106,6 +106,11 @@ func (s *APIServer) registerRoutes(allowedOrigins []string) {
 	r.GET("/ws/chat", s.ChatWebSocket)
 	r.GET("/chat/history", auth.AuthMiddleware(), s.ChatHistory)
 
+	// ── Server-Sent Events (browser bridge for UDP/TCP events) ──
+	// Public route; the handler validates the JWT from the ?token= query param
+	// because EventSource cannot send an Authorization header.
+	r.GET("/events/stream", s.EventStream)
+
 	// ── Data collection / export (auth) ──
 	dataRoutes := r.Group("/data", auth.AuthMiddleware())
 	{
