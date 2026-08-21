@@ -1394,15 +1394,15 @@ Backup
 
 Checklist:
 
-- [ ] Identify database file.
-- [ ] Identify Docker volume.
-- [ ] Create backup procedure.
-- [ ] Test backup.
-- [ ] Test restore.
-- [ ] Document backup location.
-- [ ] Document retention.
-- [ ] Test database persistence after container recreation.
-- [ ] Never use `docker compose down -v` for normal deployment.
+- [x] Identify database file.
+- [x] Identify Docker volume.
+- [x] Create backup procedure.
+- [x] Test backup.
+- [x] Test restore.
+- [x] Document backup location.
+- [x] Document retention.
+- [x] Test database persistence after container recreation.
+- [x] Never use `docker compose down -v` for normal deployment.
 
 ## Gate
 

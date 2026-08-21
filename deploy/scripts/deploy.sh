@@ -7,6 +7,7 @@ DEPLOY_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 readonly DEPLOY_DIR
 readonly ENV_FILE="${MANGAHUB_ENV_FILE:-/opt/mangahub/.env}"
 readonly STATE_DIR="${MANGAHUB_STATE_DIR:-/var/lib/mangahub-deploy}"
+readonly COMPOSE_PROJECT="${MANGAHUB_COMPOSE_PROJECT:-mangahub-prod}"
 readonly BACKEND_REPOSITORY="${MANGAHUB_BACKEND_REPOSITORY:-ghcr.io/anhhuynh1707/mangahub}"
 readonly FRONTEND_REPOSITORY="${MANGAHUB_FRONTEND_REPOSITORY:-ghcr.io/anhhuynh1707/mangahub-frontend}"
 
@@ -26,6 +27,7 @@ readonly RELEASE_SHA="$1"
 readonly MODE="${2:-base}"
 [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "release must be a full 40-character lowercase Git SHA"
 [[ "$MODE" == "base" || "$MODE" == "--with-raw" ]] || { usage; exit 2; }
+[[ "$COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "MANGAHUB_COMPOSE_PROJECT is invalid"
 [[ -f "$ENV_FILE" ]] || fail "missing $ENV_FILE; run configure-server.sh first"
 [[ ! -L "$ENV_FILE" ]] || fail "$ENV_FILE must not be a symbolic link"
 [[ "$(stat -c '%a' "$ENV_FILE")" == "600" ]] || fail "$ENV_FILE must have mode 600"
@@ -62,7 +64,7 @@ if [[ "$MODE" == "--with-raw" ]]; then
 fi
 
 compose() {
-  docker compose --project-name mangahub-prod --env-file "$ENV_FILE" \
+  docker compose --project-name "$COMPOSE_PROJECT" --env-file "$ENV_FILE" \
     "${compose_files[@]}" "$@"
 }
 

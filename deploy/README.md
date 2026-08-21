@@ -42,8 +42,8 @@ deploy/
     ├── deploy.sh                      # pull and start one exact full-SHA release
     ├── healthcheck.sh                 # behavior and exposure gate
     ├── rollback.sh                    # redeploy the previously recorded SHA
-    ├── backup.sh                      # added with tested SQLite backup
-    └── restore.sh                     # added with tested recovery
+    ├── backup.sh                      # online SQLite backup, integrity, checksum, retention
+    └── restore.sh                     # offline atomic restore with automatic recovery
 ```
 
 The base production file never publishes raw service ports. Add
@@ -161,5 +161,6 @@ sudo ./deploy/scripts/rollback.sh
 
 Rollback is unavailable until a known-good release has been followed by an
 attempted different release. See `docs/ROLLBACK.md` for the operator procedure.
-Backup and restore scripts remain a separate later gate; rollback is not a
-substitute for a SQLite backup.
+Online backup and atomic restore are implemented and locally rehearsed; see
+`docs/BACKUP.md`. Their first EC2 rehearsal remains a manual gate. Rollback is
+not a substitute for a SQLite backup.

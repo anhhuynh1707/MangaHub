@@ -80,6 +80,9 @@ jobs:
       - name: Build — grpc-server
         run: go build ./cmd/grpc-server/
 
+      - name: Build — db-tool
+        run: go build ./cmd/db-tool/
+
       - name: Build — cli
         run: go build ./cmd/cli/
 
@@ -94,6 +97,9 @@ jobs:
 
       - name: Run tests (udp)
         run: go test -race -v -timeout 30s ./internal/udp/...
+
+      - name: Run tests (database operations)
+        run: go test -race -v -timeout 60s ./internal/dbops/...
 
       - name: Run complete test suite
         run: go test -timeout 120s ./...

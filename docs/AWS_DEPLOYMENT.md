@@ -441,6 +441,48 @@ export MANGAHUB_GRPC_ADDR=PUBLIC_IPV4:9092
 For a later bad release, `sudo ./deploy/scripts/rollback.sh` redeploys the
 previously recorded SHA and runs the same health gate. It never deletes volumes.
 
+## Checkpoint J — prove SQLite backup and restore
+
+Do this only with disposable demo accounts. Restore intentionally removes every
+database change made after the selected backup.
+
+1. Confirm one baseline demo account can log in.
+2. Create and list a verified online backup:
+
+```bash
+cd /opt/mangahub-src
+sudo ./deploy/scripts/backup.sh
+sudo ./deploy/scripts/backup.sh --list
+```
+
+3. Copy the exact newest `mangahub-...db` filename from the output. Do not copy
+   or display database contents.
+4. In the browser, register a second account named only for restore proof and
+   confirm it can log in.
+5. Restore the earlier backup, replacing `BACKUP_FILENAME`:
+
+```bash
+sudo ./deploy/scripts/restore.sh BACKUP_FILENAME
+```
+
+6. The command must report a verified pre-restore recovery point, healthy
+   services, and a passed health gate.
+7. Confirm the baseline account still works and the post-backup proof account no
+   longer exists. This demonstrates actual data recovery rather than merely
+   creating a file.
+8. List the retained backups again:
+
+```bash
+sudo ./deploy/scripts/backup.sh --list
+```
+
+The backups live in the separate
+`mangahub-prod_mangahub-backups` Docker volume and default to seven retained
+backup/checksum pairs. Both volumes are initially on the same encrypted EBS
+disk, so export a wanted backup off the instance before termination. The future
+S3 export is not implemented yet. See `docs/BACKUP.md` for the recovery model
+and failure rules.
+
 ## HTTP, HTTPS, and the raw protocols
 
 HTTPS does not disable TCP, UDP, or gRPC. They are separate listeners:

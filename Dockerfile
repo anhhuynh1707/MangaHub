@@ -27,6 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /app/bin/udp-server ./cmd/udp-server && \
     CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /app/bin/tcp-server ./cmd/tcp-server && \
     CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /app/bin/grpc-server ./cmd/grpc-server && \
+    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /app/bin/db-tool ./cmd/db-tool && \
     CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /app/bin/mangahub ./cmd/cli
 
 # Final stage

@@ -39,7 +39,10 @@ This is an accepted project decision, not a second branch to create.
 | Phases 11-14: AWS foundation | Beginner console runbook ready; manual execution pending | `docs/AWS_DEPLOYMENT.md` covers account security, budget, IAM role, VPC, Security Group, EC2, SSM, Docker, and cost checkpoints |
 | Phases 15-17: manual EC2 deployment | Runbook and public candidate images ready; AWS execution pending | Matching anonymous backend/frontend `sha-675ff8a…` manifests and the full CI run are verified |
 | Phases 18-21: immutable release, health, rollback | Implemented; two-version local rollback rehearsal passed | `675ff8a…` deployed, `d547361…` restored, the same SQLite inode remained, and HTTP/TCP/UDP/gRPC checks passed |
-| Phase 22 onward | Not implemented yet | HTTPS requires a future domain; monitoring and backup remain planned and must not be presented as complete |
+| Phase 22: HTTPS | Deferred by project decision | A domain and certificate are intentionally absent; HTTP is limited to disposable demo credentials |
+| Phase 23: AWS monitoring | Not implemented yet | CloudWatch agent, alarms, and retention remain pending AWS infrastructure |
+| Phase 24: SQLite backup/recovery | Implemented; isolated local restore rehearsal passed | Online WAL-safe copy, integrity/checksum verification, separate volume, retention, pre-restore point, atomic restore, failure guard, and health gate |
+| Phase 25 onward | Partially implemented | Existing container/application hardening is verified; AWS controls, final audit, architecture evidence, and PR remain pending |
 
 ## Delivery gates
 
@@ -73,6 +76,7 @@ docs/DEVSECOPS.md         implementation record and phase evidence
 docs/SECURITY.md          security boundaries and operator rules
 docs/AWS_DEPLOYMENT.md    hands-on account, network, EC2, and deployment guide
 docs/ROLLBACK.md          non-destructive rollback procedure and failure handling
+docs/BACKUP.md            verified SQLite backup, restore, retention, and evidence
 ```
 
 Local development continues to use the root `docker-compose.yml`. Production

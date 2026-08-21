@@ -41,7 +41,8 @@ The AWS portfolio path is documented in the beginner-oriented
 VPC, one EC2 instance, Session Manager instead of public SSH, and explicit cost
 and cleanup checkpoints; the document does not claim resources exist before
 they are manually verified. The immutable deployment and recovery contract is
-documented in [`docs/ROLLBACK.md`](docs/ROLLBACK.md).
+documented in [`docs/ROLLBACK.md`](docs/ROLLBACK.md), while the WAL-safe SQLite
+procedure and proof are in [`docs/BACKUP.md`](docs/BACKUP.md).
 
 ---
 

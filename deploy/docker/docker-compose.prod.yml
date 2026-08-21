@@ -32,6 +32,42 @@ services:
     volumes:
       - mangahub-data:/app/data
 
+  backup-init:
+    image: "${MANGAHUB_IMAGE:-mangahub-backend:local}"
+    profiles: ["operations"]
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 10001:10001 /backups"]
+    restart: "no"
+    read_only: true
+    network_mode: none
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+    volumes:
+      - mangahub-backups:/backups
+
+  db-admin:
+    image: "${MANGAHUB_IMAGE:-mangahub-backend:local}"
+    profiles: ["operations"]
+    user: "10001:10001"
+    entrypoint: ["db-tool"]
+    restart: "no"
+    read_only: true
+    network_mode: none
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    volumes:
+      - mangahub-data:/app/data
+      - mangahub-backups:/backups
+
   edge:
     image: nginxinc/nginx-unprivileged:1.30-alpine3.24@sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49
     user: "101:101"
@@ -96,7 +132,7 @@ services:
       LOG_LEVEL: "${LOG_LEVEL:-info}"
       LOG_FORMAT: json
       FRONTEND_ORIGINS: "${PUBLIC_ORIGIN:-http://localhost:8088}"
-      TRUSTED_PROXIES: 172.30.0.0/24
+      TRUSTED_PROXIES: "${TRUSTED_PROXY_CIDR:-172.30.0.0/24}"
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ""
       REDIS_DB: "0"
@@ -200,13 +236,14 @@ networks:
   frontend:
     ipam:
       config:
-        - subnet: 172.30.0.0/24
+        - subnet: "${FRONTEND_SUBNET:-172.30.0.0/24}"
   backend:
     internal: true
     ipam:
       config:
-        - subnet: 172.31.0.0/24
+        - subnet: "${BACKEND_SUBNET:-172.31.0.0/24}"
 
 volumes:
   mangahub-data:
+  mangahub-backups:
   redis-data:

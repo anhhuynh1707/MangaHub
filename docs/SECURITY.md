@@ -108,8 +108,10 @@ not permit a new token anywhere in the repository.
 - Keep the previous known-good image for rollback.
 - Never run `docker compose down -v` during deployment or rollback.
 - A backup is valid only after restore is tested on a separate path or volume.
-- Backups are encrypted, private, retained for a documented period, and kept off
-  the instance once S3 backup is implemented.
+- Local backup files and checksum sidecars are mode `0600`; EC2 storage must be
+  EBS-encrypted. The default retention is seven verified pairs. They remain on
+  the instance until a future encrypted S3 export is implemented, so they do
+  not yet protect against instance or EBS loss.
 - Logs exclude authorization headers, JWTs, passwords, environment dumps, and
   other secrets; CloudWatch retention is finite.
 
