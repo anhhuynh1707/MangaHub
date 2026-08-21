@@ -24,23 +24,86 @@ added, so local and AWS behavior do not become mixed together.
 - A deployment succeeds only after application health checks pass.
 - Normal deployment and rollback must never run `docker compose down -v`.
 
-## Planned structure
+## Structure and implementation state
 
-Files are added only when their phase is implemented and tested:
+Files are added only when they have a real purpose:
 
 ```text
 deploy/
 ├── docker/
-│   ├── docker-compose.prod.yml  # EC2 runtime definition
-│   └── .env.example             # placeholders and documented inputs only
+│   ├── docker-compose.prod.yml        # production runtime definition
+│   ├── docker-compose.prod.local.yml  # local image-build override
+│   ├── docker-compose.raw.yml         # opt-in TCP/UDP/gRPC host bindings
+│   └── .env.example                   # placeholders and documented inputs
 ├── nginx/
-│   └── nginx.conf               # SPA, API, WebSocket, and SSE routing
+│   └── nginx.conf                     # edge, REST, WebSocket, and SSE routing
 └── scripts/
-    ├── deploy.sh                # immutable deployment + health gate
-    ├── healthcheck.sh           # edge and dependency checks
-    ├── rollback.sh              # return to previous known-good image
-    ├── backup.sh                # consistent SQLite backup
-    └── restore.sh               # explicit, guarded recovery procedure
+    ├── deploy.sh                      # added with the deployment phase
+    ├── healthcheck.sh                 # added with the health-check phase
+    ├── rollback.sh                    # added after manual deploy is proven
+    ├── backup.sh                      # added with tested SQLite backup
+    └── restore.sh                     # added with tested recovery
+```
+
+The base production file never publishes raw service ports. Add
+`docker-compose.raw.yml` only for a deliberate protocol demonstration. It binds
+to `127.0.0.1` by default; EC2 may use `0.0.0.0` only together with owner-IP
+`/32` AWS Security Group rules.
+
+## Local production-style test
+
+Docker Desktop must be running. Generate an ephemeral secret in the current
+terminal, then build the production images and start the stack:
+
+```bash
+export JWT_SECRET="$(openssl rand -base64 48)"
+export HOST_HTTP_PORT=8088
+export PUBLIC_ORIGIN=http://localhost:8088
+
+docker compose \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  up -d --build
+```
+
+Verify the edge and API readiness:
+
+```bash
+docker compose \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  ps
+
+curl --fail http://localhost:8088/health
+```
+
+For a local raw-protocol test, include the opt-in override:
+
+```bash
+docker compose \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  -f deploy/docker/docker-compose.raw.yml \
+  up -d --build
+```
+
+The CLI defaults to local endpoints. For the later EC2 demonstration, set these
+only in the terminal used for testing, replacing the documentation address:
+
+```bash
+export MANGAHUB_API_URL=http://203.0.113.10/api
+export MANGAHUB_TCP_ADDR=203.0.113.10:9090
+export MANGAHUB_UDP_ADDR=203.0.113.10:9091
+export MANGAHUB_GRPC_ADDR=203.0.113.10:9092
+```
+
+Stop containers without deleting persistent volumes:
+
+```bash
+docker compose \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  down
 ```
 
 ## Intended release flow

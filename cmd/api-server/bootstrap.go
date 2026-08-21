@@ -107,6 +107,19 @@ func corsOrigins() []string {
 	return origins
 }
 
+// trustedProxies returns the explicit proxy IPs/CIDRs that Gin may trust when
+// resolving the original client address from forwarding headers. An empty value
+// trusts no proxy, which is correct for direct local API access.
+func trustedProxies() []string {
+	var proxies []string
+	for _, proxy := range strings.Split(os.Getenv("TRUSTED_PROXIES"), ",") {
+		if value := strings.TrimSpace(proxy); value != "" {
+			proxies = append(proxies, value)
+		}
+	}
+	return proxies
+}
+
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

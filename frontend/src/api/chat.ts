@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import { webSocketUrl } from './baseUrl'
 
 // Mirrors the Go ChatMessage struct (internal/websocket/hub.go)
 export interface ChatMessage {
@@ -34,11 +35,9 @@ export const isMangaRoom = (room: string) => room.startsWith(MANGA_ROOM_PREFIX)
 export const mangaIdFromRoom = (room: string) =>
   isMangaRoom(room) ? room.slice(MANGA_ROOM_PREFIX.length) : ''
 
-// Build the WebSocket URL from the HTTP API base, swapping the scheme.
+// Build the WebSocket URL from the same API base used by REST requests.
 export function buildChatSocketUrl(token: string, room: string): string {
-  const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
-  const wsBase = apiBase.replace(/^http/, 'ws')
-  return `${wsBase}/ws/chat?token=${encodeURIComponent(token)}&room=${encodeURIComponent(room)}`
+  return webSocketUrl('/ws/chat', { token, room })
 }
 
 export const chatApi = {

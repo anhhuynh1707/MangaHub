@@ -1,0 +1,12 @@
+services:
+  mangahub-tcp:
+    ports:
+      - "${RAW_BIND_ADDRESS:-127.0.0.1}:9090:9090/tcp"
+
+  mangahub-udp:
+    ports:
+      - "${RAW_BIND_ADDRESS:-127.0.0.1}:9091:9091/udp"
+
+  mangahub-grpc:
+    ports:
+      - "${RAW_BIND_ADDRESS:-127.0.0.1}:9092:9092/tcp"

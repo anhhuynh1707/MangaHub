@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import { useNotificationStore, type ServerNotification } from '@/store/notificationStore'
 import { showEventToast } from '@/lib/eventToast'
+import { apiUrl } from '@/api/baseUrl'
 
 // The SSE envelope mirrors internal/sse/hub.go Event.
 interface ServerEvent {
@@ -20,8 +21,9 @@ interface ProgressData {
 }
 
 function eventStreamUrl(token: string): string {
-  const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
-  return `${apiBase}/events/stream?token=${encodeURIComponent(token)}`
+  const url = new URL(apiUrl('/events/stream'), window.location.origin)
+  url.searchParams.set('token', token)
+  return url.toString()
 }
 
 /**

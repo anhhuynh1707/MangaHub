@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"net/http"
 	"time"
 
 	"mangahub/pkg/utils"
@@ -90,35 +91,37 @@ func (s *APIServer) checkGRPC() gin.H {
 
 // ── Health endpoints ─────────────────────────────────────────────────
 
-// Health is a comprehensive health check across all services.
+// Health is the minimal readiness endpoint exposed by the edge proxy. Detailed
+// dependency endpoints remain available on the private API network for
+// diagnostics but are blocked at the public proxy.
 func (s *APIServer) Health(c *gin.Context) {
-	dbHealth := s.checkDatabase()
-	overallStatus := "healthy"
-	if dbHealth["status"] == "unhealthy" {
-		overallStatus = "degraded"
+	if err := s.Database.Ping(); err != nil {
+		utils.ErrorResponse(c, http.StatusServiceUnavailable, "MangaHub API is not ready")
+		return
 	}
-	count, _ := s.MangaService.GetCount()
 	utils.SuccessResponse(c, "MangaHub API is running", gin.H{
-		"status":      overallStatus,
-		"manga_count": count,
-		"services": gin.H{
-			"api":       gin.H{"status": "healthy", "port": s.Port},
-			"database":  dbHealth,
-			"cache":     s.checkRedis(),
-			"tcp":       s.checkTCP(),
-			"udp":       s.checkUDP(),
-			"websocket": s.checkWebSocket(),
-			"grpc":      s.checkGRPC(),
-		},
+		"status": "healthy",
 	})
 }
 
-func (s *APIServer) HealthDB(c *gin.Context)    { utils.SuccessResponse(c, "Database health", s.checkDatabase()) }
-func (s *APIServer) HealthCache(c *gin.Context) { utils.SuccessResponse(c, "Cache health", s.checkRedis()) }
-func (s *APIServer) HealthTCP(c *gin.Context)   { utils.SuccessResponse(c, "TCP server health", s.checkTCP()) }
-func (s *APIServer) HealthUDP(c *gin.Context)   { utils.SuccessResponse(c, "UDP server health", s.checkUDP()) }
-func (s *APIServer) HealthWS(c *gin.Context)    { utils.SuccessResponse(c, "WebSocket hub health", s.checkWebSocket()) }
-func (s *APIServer) HealthGRPC(c *gin.Context)  { utils.SuccessResponse(c, "gRPC server health", s.checkGRPC()) }
+func (s *APIServer) HealthDB(c *gin.Context) {
+	utils.SuccessResponse(c, "Database health", s.checkDatabase())
+}
+func (s *APIServer) HealthCache(c *gin.Context) {
+	utils.SuccessResponse(c, "Cache health", s.checkRedis())
+}
+func (s *APIServer) HealthTCP(c *gin.Context) {
+	utils.SuccessResponse(c, "TCP server health", s.checkTCP())
+}
+func (s *APIServer) HealthUDP(c *gin.Context) {
+	utils.SuccessResponse(c, "UDP server health", s.checkUDP())
+}
+func (s *APIServer) HealthWS(c *gin.Context) {
+	utils.SuccessResponse(c, "WebSocket hub health", s.checkWebSocket())
+}
+func (s *APIServer) HealthGRPC(c *gin.Context) {
+	utils.SuccessResponse(c, "gRPC server health", s.checkGRPC())
+}
 
 // ── Cache management ─────────────────────────────────────────────────
 

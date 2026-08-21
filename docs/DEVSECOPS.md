@@ -32,7 +32,9 @@ This is an accepted project decision, not a second branch to create.
 | Phase 0: baseline | Historical baseline exists; full gate will be rerun before production changes | Existing CI and local Compose |
 | Phase 1: branch | Branch complete; CI gate pending PR | `features/devsecops` tracks `origin/features/devsecops`; the current workflow does not run on a feature-branch push |
 | Phase 2: structure | Complete | `deploy/`, `infra/aws/`, this record, and security policy |
-| Phase 3 onward | Not implemented yet | Must not be presented as complete |
+| Phases 3-7: production runtime | Implemented; Docker runtime gate pending | Separate Compose/overrides, same-origin `/api`, hardened backend image, private networks, edge Nginx |
+| Phase 8: local production test | Blocked on Docker Desktop running | Compose configuration, Go tests/vet, and frontend production build pass; container runtime verification remains |
+| Phase 9 onward | Not implemented yet | Must not be presented as complete |
 
 ## Delivery gates
 

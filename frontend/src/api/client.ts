@@ -1,9 +1,10 @@
 import axios from 'axios'
 import { useAuthStore } from '@/store/authStore'
 import { notify } from '@/lib/notify'
+import { API_BASE_URL } from './baseUrl'
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080',
+  baseURL: API_BASE_URL,
   timeout: 15_000,
   headers: { 'Content-Type': 'application/json' },
 })

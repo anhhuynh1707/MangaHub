@@ -1,0 +1,27 @@
+x-local-backend-build: &local-backend-build
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+
+services:
+  data-init:
+    <<: *local-backend-build
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+
+  mangahub-api:
+    <<: *local-backend-build
+
+  mangahub-tcp:
+    <<: *local-backend-build
+
+  mangahub-udp:
+    <<: *local-backend-build
+
+  mangahub-grpc:
+    <<: *local-backend-build

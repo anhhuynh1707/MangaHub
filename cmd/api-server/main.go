@@ -100,6 +100,10 @@ func main() {
 		EnableGRPC:        enableGRPC,
 		UseClients:        !enableTCP || !enableUDP,
 	}
+	if err := s.Router.SetTrustedProxies(trustedProxies()); err != nil {
+		slog.Error("invalid TRUSTED_PROXIES configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// Recovery (outermost) + structured per-request logging. Replaces the text
 	// logger that gin.Default() would have added.
