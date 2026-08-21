@@ -52,37 +52,60 @@ Elastic IP, domain, or certificate.
 5. Prefer a passkey/security key or an authenticator app. Register a second
    recovery-capable authenticator if available.
 6. Confirm that the root user has no access keys. Do not create one.
+7. While still in this root-only setup session, open **Account** from the account
+   menu. Under **IAM User and Role Access to Billing Information**, choose
+   **Edit**, enable **Activate IAM Access**, and update it. This lets the daily
+   administrator create and inspect the budget without returning to root.
 
 AWS requires root-user MFA and recommends an administrative identity for daily
 work instead of root credentials. See [AWS account administrator security best
-practices](https://docs.aws.amazon.com/signin/latest/userguide/best-practices-admin.html).
+practices](https://docs.aws.amazon.com/signin/latest/userguide/best-practices-admin.html)
+and the [root-only billing-access
+setting](https://docs.aws.amazon.com/cost-management/latest/userguide/control-access-billing.html).
 
-### A2. Create the daily administrative identity
+### A2. Create the daily administrative identity without losing free-plan credits
 
-Recommended path for a new standalone account:
+The screenshot identifies this as an AWS **Free account plan**. Do **not** enable
+an organization instance of IAM Identity Center for this lab. AWS states that a
+free-plan account automatically upgrades when it creates or joins AWS
+Organizations and that its remaining free-plan credits then expire immediately.
+An Identity Center account instance is not an alternative because it does not
+support AWS account access or permission sets.
 
-1. Search for **IAM Identity Center**.
-2. Keep the console in **Asia Pacific (Sydney)**.
-3. Choose **Enable** and use the AWS Organizations organization-instance option.
-   Creating the one-account organization is expected.
-4. Open **Users** and choose **Add user**.
-5. Use an email address you control and send the setup invitation.
-6. Open **Permission sets** and create the predefined
-   **AdministratorAccess** permission set for initial bootstrap.
-7. Open **AWS accounts**, select this account, choose **Assign users or groups**,
-   select the new user, and assign `AdministratorAccess`.
-8. Accept the email invitation, create the password, and register MFA.
-9. Sign out of the root session. Sign back in through the AWS access portal and
-   open the `AdministratorAccess` role.
+For this one-person, single-account lab, use a console-only IAM administrator as
+an explicit temporary exception to AWS's federation preference:
 
-This follows the [AWS Identity Center administrative-user
-guide](https://docs.aws.amazon.com/singlesignon/latest/userguide/quick-start-default-idc.html).
-Later, a narrower MangaHub permission set can replace daily administrator access.
-Do not create an IAM access key for this console lab.
+1. Open the account menu and identify the current session. If it says **IAM
+   user**, record only the user name—not the account ID—and inspect that user in
+   **IAM → Users** before creating anything. Do not create a duplicate if the
+   existing user already satisfies steps 7–9.
+2. If the current session is **Root user**, search for **IAM** and open **User
+   groups**.
+3. Choose **Create group**, name it `MangaHubAdministrators`, select the AWS
+   managed `AdministratorAccess` policy, and create the group. This broad policy
+   is only for initial account bootstrap.
+4. Open **Users → Create user** and name the user `mangahub-admin`.
+5. Enable **AWS Management Console** access. If the console recommends Identity
+   Center, acknowledge that this IAM user is the documented free-plan exception.
+6. Add the user to `MangaHubAdministrators`, complete creation, and securely
+   perform the first console sign-in/password change through the account's IAM
+   sign-in URL.
+7. As `mangahub-admin`, open **Security credentials → Multi-factor
+   authentication (MFA) → Assign MFA device**. Prefer a passkey/security key or
+   use an authenticator app.
+8. In the same page, confirm **Access keys = 0**. Do not create an access key;
+   browser administration and EC2's instance role need none.
+9. Verify the user belongs only to `MangaHubAdministrators`, sign out, and prove
+   a fresh IAM-user sign-in requires MFA. Stop using root for daily work.
 
-If the account is already a member of an AWS Organization, or Identity Center
-shows an organization/Region ownership warning, stop here rather than creating a
-second identity setup.
+AWS documents the [free-plan Organizations
+effect](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-FAQ.html),
+the [console-only IAM-user
+flow](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html), and
+[IAM-user MFA](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_enable_virtual.html).
+When the project intentionally moves to a paid or multi-account setup, migrate
+human access to an organization instance of IAM Identity Center and temporary
+credentials, then remove the lab IAM user.
 
 ### A3. Create a cost budget
 
@@ -109,8 +132,9 @@ budget](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-cre
 2. Select **Asia Pacific (Sydney) — ap-southeast-2** in the Region menu.
 3. Keep this Region selected for VPC, EC2, Systems Manager, and CloudWatch.
 
-Checkpoint A is complete only when root MFA is enabled, daily login uses the
-Identity Center user, the budget exists, and the console says Sydney.
+Checkpoint A is complete only when root MFA is enabled, the daily IAM
+administrator requires MFA and has no access keys, the budget exists, and the
+console says Sydney.
 
 ## Checkpoint B — create the EC2 role for Session Manager
 
@@ -535,7 +559,9 @@ the [official VPC pricing page](https://aws.amazon.com/vpc/pricing/) before laun
 Before proceeding to image deployment, confirm all of the following:
 
 - [ ] Root MFA is enabled and root is no longer used daily.
-- [ ] Identity Center administrator login works with MFA.
+- [ ] Root activated IAM access to Billing and Cost Management.
+- [ ] The console-only IAM administrator login requires MFA and has zero access
+      keys.
 - [ ] The USD 5 monthly budget and email alerts exist.
 - [ ] The console Region is Sydney.
 - [ ] `MangaHubDemoEC2Role` exists with only the SSM core policy.
