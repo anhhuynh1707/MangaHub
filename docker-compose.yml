@@ -82,11 +82,8 @@ services:
     command: udp-server
     ports:
       - "9091:9091/udp"
-    volumes:
-      - mangahub-data:/app/data
     environment:
       - UDP_PORT=9091
-      - DB_PATH=/app/data/mangahub.db
     restart: unless-stopped
 
   # ── gRPC Service ─────────────────────────────────────────────────

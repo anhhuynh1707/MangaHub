@@ -210,14 +210,8 @@ services:
   mangahub-udp:
     <<: *backend-common
     command: ["udp-server"]
-    volumes:
-      - mangahub-data:/app/data
     environment:
       UDP_PORT: "9091"
-      DB_PATH: /app/data/mangahub.db
-    depends_on:
-      data-init:
-        condition: service_completed_successfully
 
   mangahub-grpc:
     <<: *backend-common

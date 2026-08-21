@@ -3386,7 +3386,11 @@ All health routes are completely unauthenticated (`Public`), making them suitabl
 
 ### 11.1 Architecture
 
-MangaHub is deployed as a suite of microservices using `docker-compose.yml`. Despite the fragmented execution models (HTTP, TCP, UDP, gRPC), the system uses a single unified `Dockerfile` and a shared database volume to simplify deployment while maintaining network isolation.
+MangaHub is deployed as a suite of services using `docker-compose.yml`.
+Despite the fragmented execution models (HTTP, TCP, UDP, gRPC), the system uses
+a single unified `Dockerfile`. Only services that read or persist application
+data receive the shared database volume; the stateless UDP notification server
+does not.
 
 ### 11.2 Multi-Stage Build (`Dockerfile`)
 
@@ -3425,7 +3429,7 @@ The compose file defines 5 independent services that communicate internally:
 | `redis` | `redis-server` | `6379` | None | Distributed caching |
 | `mangahub-api` | `api-server` | `8080` | `redis`, tcp, udp, grpc | HTTP API & WebSocket Chat |
 | `mangahub-tcp` | `tcp-server` | `9090` | Shared SQLite volume | Sync progress & strategies |
-| `mangahub-udp` | `udp-server` | `9091/udp` | Shared SQLite volume | Broadcast notifications |
+| `mangahub-udp` | `udp-server` | `9091/udp` | None | Broadcast notifications |
 | `mangahub-grpc`| `grpc-server` | `9092` | Shared SQLite volume | Remote Procedure Calls |
 
 ---
@@ -3442,11 +3446,13 @@ volumes:
 services:
   mangahub-api:  { volumes: ["mangahub-data:/app/data"] }
   mangahub-tcp:  { volumes: ["mangahub-data:/app/data"] }
-  mangahub-udp:  { volumes: ["mangahub-data:/app/data"] }
   mangahub-grpc: { volumes: ["mangahub-data:/app/data"] }
 ```
 
 Because SQLite is a file-based database, deploying it in a microservice environment requires **sharing the database file** (`mangahub.db`) across all containers via the `mangahub-data` volume.
+
+The sharing statement applies only to the API, TCP, and gRPC services that use
+SQLite. UDP notifications remain stateless and have no database mount.
 
 **How it prevents locks:**
 - `go-sqlite3` is configured with `_journal_mode=WAL` (Write-Ahead Logging) during connection.
