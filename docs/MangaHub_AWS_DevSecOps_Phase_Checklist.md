@@ -518,11 +518,24 @@ Do not create empty files just to match this tree. Every file must have a real p
 
 Checklist:
 
-- [ ] Production deployment directory created.
-- [ ] AWS documentation created.
-- [ ] Security documentation created.
-- [ ] Existing local development files remain understandable.
-- [ ] No secrets added.
+- [x] Production deployment directory created.
+- [x] AWS documentation created.
+- [x] Security documentation created.
+- [x] Existing local development files remain understandable.
+- [x] No secrets added.
+
+Phase 2 evidence:
+
+- `deploy/README.md` defines the production deployment contract and the purpose
+  of each future deployment artifact without creating empty placeholders.
+- `infra/aws/README.md` records the agreed Sydney learning-VPC architecture,
+  resource purpose/cost/security/dependencies, and owner-only raw protocol
+  access.
+- `docs/DEVSECOPS.md` records decisions, gates, status, and portfolio claim
+  rules.
+- `docs/SECURITY.md` defines the temporary HTTP demo boundary, secrets policy,
+  network policy, data safety, and stop-work conditions.
+- `git diff --check` and a targeted credential/private-key pattern scan passed.
 
 ---
 
@@ -1719,8 +1732,8 @@ Only claim technologies that are actually implemented.
 | Phase | Area | Status |
 |---|---|---|
 | 0 | Baseline verification | ⬜ |
-| 1 | DevSecOps branch | ⬜ |
-| 2 | Repository structure | ⬜ |
+| 1 | DevSecOps branch | 🟨 Branch complete; CI gate pending PR |
+| 2 | Repository structure | ✅ |
 | 3 | Production Docker | ⬜ |
 | 4 | Production frontend | ⬜ |
 | 5 | Production backend | ⬜ |
