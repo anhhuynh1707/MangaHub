@@ -1,6 +1,6 @@
 # MangaHub release rollback
 
-Status: **implementation locally verified; first EC2 rehearsal pending**.
+Status: **two-version local rehearsal passed; first EC2 rehearsal pending**.
 
 MangaHub deploys backend and frontend images with the same full Git SHA. The
 deployment script records a release only after all required containers are
@@ -94,3 +94,23 @@ If rollback itself fails:
 If there is no `previous-version`, no earlier release has been recorded. Fix or
 redeploy the first known-good release explicitly; do not invent a SHA and do not
 delete the data volume.
+
+## Local rehearsal evidence
+
+On 2026-08-21, the release path was exercised with the anonymous GHCR
+`linux/amd64` candidates while preserving the existing production-proof named
+volume:
+
+1. `d5473615f97d285c265656ddbc23aa1d4c3ce529` was healthy in raw mode.
+2. `675ff8a4231a0b832070d6130ca1518dfd0e2e4a` deployed in base mode and passed
+   the edge health gate.
+3. The recorded previous state was the full `d547361…` SHA plus raw mode.
+4. `rollback.sh` restored that release and passed the same health gate.
+5. The SQLite file retained inode `458139` and size `4096` bytes across both
+   container replacements; the named volume remained
+   `mangahub-prod_mangahub-data`.
+6. The post-rollback TCP welcome, UDP request/response, and gRPC TCP listener
+   checks passed.
+
+This is local operational evidence, not a claim that the AWS instance exists.
+The EC2 rehearsal remains gated by the manual account and VPC checkpoints.

@@ -1311,13 +1311,13 @@ deploy/scripts/rollback.sh
 
 Requirements:
 
-- [ ] Identify previous version.
-- [ ] Pull previous image.
-- [ ] Restart affected services.
-- [ ] Wait for health.
-- [ ] Verify application.
-- [ ] Print rollback result.
-- [ ] Preserve database.
+- [x] Identify previous version.
+- [x] Pull previous image.
+- [x] Restart affected services.
+- [x] Wait for health.
+- [x] Verify application.
+- [x] Print rollback result.
+- [x] Preserve database.
 
 Never delete the database during rollback.
 

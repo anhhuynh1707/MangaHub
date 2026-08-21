@@ -32,13 +32,13 @@ This is an accepted project decision, not a second branch to create.
 | Phase 0: baseline | Historical baseline exists; full gate will be rerun before production changes | Existing CI and local Compose |
 | Phase 1: branch | Branch complete; remote CI rerun pending push | `features/devsecops` tracks `origin/features/devsecops`; CI now includes this branch |
 | Phase 2: structure | Complete | `deploy/`, `infra/aws/`, this record, and security policy |
-| Phases 3-7: production runtime | Locally verified; immutable release tags remain for CI/CD | Separate Compose/overrides, same-origin `/api`, hardened backend image, private networks, edge Nginx |
+| Phases 3-7: production runtime | Complete and locally verified | Separate Compose/overrides, same-origin `/api`, hardened images, private networks, and edge Nginx |
 | Phase 8: local production test | Complete | Production-edge Playwright journey, HTTP health/security, raw TCP/UDP/gRPC, restart persistence, container hardening, and logs passed on 2026-08-21 |
 | Phase 9: security scanning | Implemented and locally verified | Govulncheck, npm audit, Gitleaks history, Trivy repository/image scans, pinned actions, and Dependabot |
-| Phase 10: CI refactor | Implemented; branch gates and candidate publication passed at `d547361` | Existing tests/builds remain; candidate GHCR publishing requires security, Docker, E2E, and deployment-script gates |
+| Phase 10: CI refactor | Implemented; branch gates and candidate publication passed at `675ff8a` | Existing tests/builds remain; candidate GHCR publishing requires security, Docker, E2E, and deployment-script gates |
 | Phases 11-14: AWS foundation | Beginner console runbook ready; manual execution pending | `docs/AWS_DEPLOYMENT.md` covers account security, budget, IAM role, VPC, Security Group, EC2, SSM, Docker, and cost checkpoints |
-| Phases 15-17: manual EC2 deployment | Runbook and public candidate images ready; AWS execution pending | Matching anonymous backend/frontend `sha-d547361…` manifests were verified before the deployment-script commit |
-| Phases 18-21: immutable release, health, rollback | Implemented and locally exercised; two-version rollback rehearsal pending | Protected first-run config plus pull-only deploy/health/rollback scripts; CI lint gate included |
+| Phases 15-17: manual EC2 deployment | Runbook and public candidate images ready; AWS execution pending | Matching anonymous backend/frontend `sha-675ff8a…` manifests and the full CI run are verified |
+| Phases 18-21: immutable release, health, rollback | Implemented; two-version local rollback rehearsal passed | `675ff8a…` deployed, `d547361…` restored, the same SQLite inode remained, and HTTP/TCP/UDP/gRPC checks passed |
 | Phase 22 onward | Not implemented yet | HTTPS requires a future domain; monitoring and backup remain planned and must not be presented as complete |
 
 ## Delivery gates
@@ -59,6 +59,9 @@ Work proceeds in small commits and stops on a failed gate:
    controls are tested and documented.
 7. Pull request: no secrets or local artifacts, CI/security gates pass, and the
    architecture diagram matches the implementation.
+
+Latest verified branch run:
+<https://github.com/anhhuynh1707/MangaHub/actions/runs/32504720648>.
 
 ## Repository layout
 

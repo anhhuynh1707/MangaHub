@@ -468,9 +468,22 @@ the [official VPC pricing page](https://aws.amazon.com/vpc/pricing/) before laun
 
 - **Stop** the instance when pausing the lab. Compute stops, but EBS storage and
   some other resources can still cost money.
-- A normal auto-assigned public IPv4 can change after stop/start. Update the
-  MangaHub `PUBLIC_ORIGIN`, browser URL, and owner `/32` rules when addresses
-  change.
+- A normal auto-assigned EC2 public IPv4 can change after stop/start. If it does,
+  replace only the `PUBLIC_ORIGIN` line without displaying the protected file,
+  then redeploy the recorded release in base mode:
+
+  ```bash
+  NEW_PUBLIC_IPV4=REPLACE_WITH_NEW_EC2_IPV4
+  sudo sed -i "s|^PUBLIC_ORIGIN=.*|PUBLIC_ORIGIN=http://${NEW_PUBLIC_IPV4}|" /opt/mangahub/.env
+  sudo chmod 0600 /opt/mangahub/.env
+  CURRENT_SHA="$(sudo sed -n '1p' /var/lib/mangahub-deploy/current-version)"
+  cd /opt/mangahub-src
+  sudo ./deploy/scripts/deploy.sh "$CURRENT_SHA"
+  ```
+
+  Use the new browser URL. Re-enable raw mode only after the owner-only rules are
+  reviewed again. Separately, if the owner's home/public IPv4 changes, update
+  the three Security Group `/32` sources before the next raw protocol demo.
 - Do not allocate an Elastic IP for this first lab.
 - **Terminate** only after any wanted SQLite backup is verified. Termination is
   destructive when delete-on-termination is enabled.
