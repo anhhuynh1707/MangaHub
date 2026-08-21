@@ -3392,7 +3392,7 @@ MangaHub is deployed as a suite of microservices using `docker-compose.yml`. Des
 
 ```dockerfile
 # ─── STAGE 1: BUILDER ───
-FROM golang:1.25.6 AS builder
+FROM golang:1.26.6 AS builder
 # Requires Debian-based golang image for GCC/CGO (SQLite requires C bindings)
 ENV GOFLAGS=-tags=sqlite_fts5
 COPY . .
@@ -3411,7 +3411,7 @@ CMD ["api-server"] # Default execution
 ```
 
 **Key Takeaways:**
-- **CGO Dependency**: Because the system relies on `go-sqlite3` which uses C bindings, we use `golang:1.25.6` (Debian-based, GCC included) rather than Alpine.
+- **CGO Dependency**: Because the system relies on `go-sqlite3` which uses C bindings, we use `golang:1.26.6` (Debian-based, GCC included) rather than Alpine.
 - **Unified Image**: A single Docker image contains all binaries (`api-server`, `tcp-server`, `udp-server`, `grpc-server`, `mangahub`).
 
 ---

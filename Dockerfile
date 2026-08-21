@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Build stage. Keep the Go patch version aligned with go.mod/CI.
-FROM golang:1.25.6-bookworm AS builder
+FROM golang:1.26.6-bookworm AS builder
 
 WORKDIR /app
 

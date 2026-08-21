@@ -19,14 +19,16 @@ ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # ── Stage 2: Serve ────────────────────────────────────────────────
-FROM nginx:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.30-alpine3.24@sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+USER 101:101
+
+EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

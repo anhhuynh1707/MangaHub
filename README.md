@@ -22,7 +22,7 @@ generated TypeScript types, and a Playwright end-to-end test suite in CI.
 
 ## Tech Stack
 
-**Backend** — Go 1.25, [Gin](https://github.com/gin-gonic/gin),
+**Backend** — Go 1.26, [Gin](https://github.com/gin-gonic/gin),
 `gorilla/websocket`, `mattn/go-sqlite3` (SQLite + WAL), `redis/go-redis`,
 `golang-jwt`, `golang.org/x/time/rate` (rate limiting), `log/slog` (structured
 logging), `swaggo/swag` (OpenAPI).
@@ -32,7 +32,8 @@ shadcn/ui, TanStack Query (server state), Zustand (client state), React Router v
 Framer Motion, Sonner (toasts), axios.
 
 **Tooling** — Docker Compose, GitHub Actions CI (Go build/test/vet, frontend
-build, Docker smoke test, Playwright E2E, GHCR publish), `openapi-typescript` +
+build, Docker smoke test, Playwright E2E, Govulncheck, npm audit, Gitleaks,
+Trivy, and gated GHCR publishing), Dependabot, `openapi-typescript` +
 `swagger2openapi` (generated API types), Playwright (E2E).
 
 ---
@@ -127,7 +128,7 @@ Client (React SPA / CLI)
 ### 1. Prerequisites
 
 * Docker and Docker Compose
-* Go 1.25 or later
+* Go 1.26.6 or later
 
 ### 2. Environment Configuration
 

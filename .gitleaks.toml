@@ -1,0 +1,17 @@
+title = "MangaHub Gitleaks configuration"
+minVersion = "8.30.1"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "jwt"
+
+  [[rules.allowlists]]
+  description = "Expired local alice/bob Postman JWT fixtures, removed from the current collection; latest expiry was 2026-05-12"
+  condition = "AND"
+  commits = [
+    "4b329e192e7aa3222d626ccb1e10c70dc69d1ba1",
+    "8ba06c145445f1dcbe6bed61e83e8b746573af6b",
+  ]
+  paths = ['''^MangaHub_API\.postman_collection\.json$''']
