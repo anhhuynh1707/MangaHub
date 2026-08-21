@@ -94,8 +94,10 @@ test('user journey: register → login → library → progress → review → c
       .fill('A solid read — the E2E test enjoyed it.')
     await page.getByRole('button', { name: 'Submit Review' }).click()
 
-    // Either the confirmation banner or the rendered review appears.
-    await expect(page.getByText(/Review submitted|enjoyed it/)).toBeVisible()
+    // The form shows an explicit confirmation before returning to the list.
+    // Using the exact banner avoids a strict-locator collision when the saved
+    // review text renders at the same time.
+    await expect(page.getByText('Review submitted! Thank you.')).toBeVisible()
   })
 
   // ── 7. Join chat ─────────────────────────────────────────────────

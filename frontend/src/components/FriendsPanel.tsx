@@ -5,6 +5,7 @@ import { friendApi, userIdFromUsername, usernameFromUserId } from '@/api/friend'
 import { userApi } from '@/api/user'
 import { useDebounce } from '@/hooks/useDebounce'
 import { notify } from '@/lib/notify'
+import { apiErrorMessage } from '@/api/errors'
 
 function Avatar({ name }: { name: string }) {
   return (
@@ -59,9 +60,9 @@ export function FriendsPanel() {
       setFocused(false)
       refresh()
     },
-    onError: (e: any) => {
+    onError: (error: unknown) => {
       setAddOk('')
-      setAddError(e?.response?.data?.error ?? 'Could not send friend request.')
+      setAddError(apiErrorMessage(error, 'Could not send friend request.'))
     },
   })
 

@@ -47,9 +47,13 @@ export function useChat(room: string): UseChatResult {
     let timer: ReturnType<typeof setTimeout> | null = null
     let attempts = 0
 
-    // Fresh stream when switching rooms
-    setMessages([])
-    setUsers([])
+    // Fresh stream when switching rooms. Schedule the React-only reset after
+    // the effect has installed its external-system synchronization.
+    queueMicrotask(() => {
+      if (stopped) return
+      setMessages([])
+      setUsers([])
+    })
 
     function connect() {
       if (stopped) return

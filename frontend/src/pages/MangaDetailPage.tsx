@@ -10,6 +10,7 @@ import { mangaApi } from '@/api/manga'
 import { libraryApi, LIBRARY_STATUSES, type LibraryStatus } from '@/api/library'
 import { reviewApi, type Review } from '@/api/review'
 import { mangaRoomId } from '@/api/chat'
+import { apiErrorMessage } from '@/api/errors'
 import { useAuthStore } from '@/store/authStore'
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -247,8 +248,8 @@ function ReviewCard({ review, mangaId }: { review: Review; mangaId: string }) {
       setEditError('')
       qc.invalidateQueries({ queryKey: ['reviews', mangaId] })
     },
-    onError: (e: any) => {
-      setEditError(e?.response?.data?.message ?? 'Failed to update review')
+    onError: (error: unknown) => {
+      setEditError(apiErrorMessage(error, 'Failed to update review'))
     },
   })
 
@@ -400,8 +401,8 @@ function WriteReviewForm({
       qc.invalidateQueries({ queryKey: ['reviews', mangaId] })
       setTimeout(onSuccess, 1500)
     },
-    onError: (e: any) => {
-      setError(e?.response?.data?.message ?? 'Failed to submit review')
+    onError: (error: unknown) => {
+      setError(apiErrorMessage(error, 'Failed to submit review'))
     },
   })
 

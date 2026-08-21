@@ -30,12 +30,11 @@ export default function LibraryPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const [activeTab, setActiveTab] = useState<Tab>('reading')
 
-  if (!isAuthenticated) return <Navigate to="/auth" replace />
-
   const { data: libraryData, isLoading } = useQuery({
     queryKey: ['library'],
     queryFn: () => libraryApi.get().then((r) => r.data.data),
     refetchOnMount: 'always',
+    enabled: isAuthenticated,
   })
 
   const lists = libraryData?.reading_lists
@@ -51,6 +50,7 @@ export default function LibraryPage() {
       queryKey: ['manga', id],
       queryFn: () => mangaApi.get(id).then((r) => r.data.data),
       staleTime: 5 * 60 * 1000,
+      enabled: isAuthenticated,
     })),
   })
 
@@ -60,6 +60,8 @@ export default function LibraryPage() {
 
   const currentList = lists?.[activeTab] ?? []
   const totalCount = allEntries.length
+
+  if (!isAuthenticated) return <Navigate to="/auth" replace />
 
   function handleExport() {
     const payload = {
