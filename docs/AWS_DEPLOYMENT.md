@@ -6,6 +6,9 @@ repository**.
 This is the beginner-safe console path for the MangaHub portfolio environment.
 Complete one checkpoint at a time. Do not skip the verification at the end of a
 checkpoint, because later screens contain similarly named default resources.
+Record only sanitized results in `docs/AWS_EVIDENCE.md`; that record starts at
+`NOT RUN` and is the gate for changing portfolio wording from prepared to
+deployed.
 
 ## What the current EC2 screenshot confirms
 

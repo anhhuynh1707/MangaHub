@@ -569,12 +569,13 @@ Production Compose requirements:
 - [x] production frontend build
 - [x] production Go runtime
 - [x] Nginx
-- [ ] deterministic image tags
+- [x] deterministic image tags
 - [x] safe restart
 - [x] no development-only commands
 
-Immutable `sha-<commit>` release tags remain deliberately open until the image
-publishing/CD phases. The local production runtime does not use `latest`.
+Full `sha-<commit>` backend and frontend tags are published only after the
+required branch gates pass. The deploy script requires an exact 40-character
+SHA and never uses `latest`; `latest` remains a main-branch convenience tag.
 
 ---
 
@@ -683,7 +684,7 @@ Rules:
 - [x] gRPC not public unless required.
 - [x] TCP not public unless required.
 - [x] UDP not public unless required.
-- [x] Nginx is the public HTTP/HTTPS entry point.
+- [x] Nginx is the public HTTP entry point; HTTPS is deferred.
 - [x] Internal services use Docker DNS/service names.
 
 Raw protocols are an explicit owner-demo requirement. They remain unpublished
@@ -699,7 +700,7 @@ Desired:
 ```text
 Internet
    |
-HTTPS :443
+HTTP :80
    |
 Nginx
    |
@@ -725,6 +726,8 @@ Checklist:
 - [x] Test locally.
 
 Codex must inspect the actual route structure before modifying proxy paths.
+The diagram reflects the accepted domain-free HTTP demo. A later TLS phase can
+change the public listener without removing TCP, UDP, or gRPC.
 
 ---
 
@@ -1019,12 +1022,15 @@ Checklist:
 
 # 18. PHASE 13 — AWS Security Group
 
-Recommended initial inbound rules:
+The original generic recommendation is replaced by the accepted lab rules:
 
 ```text
-SSH 22      -> trusted IP only
 HTTP 80     -> public
-HTTPS 443   -> public
+TCP 9090    -> owner IPv4 /32 only, temporary
+UDP 9091    -> owner IPv4 /32 only, temporary
+TCP 9092    -> owner IPv4 /32 only, temporary
+SSH 22      -> no rule; use Session Manager
+HTTPS 443   -> no rule until a domain/TLS phase exists
 ```
 
 Do not initially expose:
@@ -1032,9 +1038,6 @@ Do not initially expose:
 ```text
 6379
 8080
-9090
-9091
-9092
 3000
 ```
 
@@ -1337,6 +1340,12 @@ Nginx
 MangaHub
 ```
 
+> **Current project decision:** HTTPS is deferred because this portfolio lab has
+> no domain. The initial deployment uses temporary HTTP with disposable demo
+> accounts. Keep every checkbox below open and do not include HTTPS in current
+> CV claims. TCP, UDP, and gRPC remain independent listeners and are not removed
+> by a future TLS upgrade.
+
 Checklist:
 
 - [ ] Obtain domain/subdomain.
@@ -1486,11 +1495,17 @@ Do not remove it.
 
 Verify:
 
-- [ ] rate limiter remains enabled.
-- [ ] reverse proxy does not break client IP handling.
-- [ ] trusted proxy configuration is correct.
-- [ ] health endpoint remains usable.
-- [ ] login/register endpoints remain protected.
+- [x] rate limiter remains enabled.
+- [x] reverse proxy preserves client IP forwarding headers.
+- [x] trusted proxy configuration is explicit and directly tested.
+- [x] health endpoint remains exempt and directly tested.
+- [x] login/register endpoints remain behind the global limiter.
+
+Repository evidence: `pkg/ratelimit/ratelimit_test.go` proves separate public
+and authenticated buckets, `429` enforcement, and health exemption;
+`cmd/api-server/bootstrap_test.go` proves explicit proxy/origin parsing and no
+wildcard CORS default. The production Compose and Nginx files supply the exact
+origin, trusted proxy CIDR, and forwarding headers.
 
 ---
 
@@ -1691,7 +1706,11 @@ docs/DEVSECOPS.md
 docs/AWS_DEPLOYMENT.md
 docs/SECURITY.md
 docs/ROLLBACK.md
-docs/ARCHITECTURE.md
+docs/BACKUP.md
+docs/MONITORING.md
+docs/AWS_ARCHITECTURE.md
+docs/AWS_EVIDENCE.md
+docs/PORTFOLIO.md
 ```
 
 Document:
@@ -1712,6 +1731,9 @@ Never document real secrets.
 ---
 
 # 38. PHASE 33 — Final Architecture Diagram
+
+Current repository artifact: `docs/AWS_ARCHITECTURE.md`. Its AWS boundary stays
+dashed/pending until the matching `docs/AWS_EVIDENCE.md` rows pass.
 
 The final diagram must represent the implementation that actually exists.
 
@@ -1766,6 +1788,15 @@ Do not claim components that are not implemented.
 
 # 39. PHASE 34 — CV/Portfolio Version
 
+Current repository artifact: `docs/PORTFOLIO.md`. It contains separate wording
+for the verified repository state and for the future post-EC2 state so AWS is
+not claimed early.
+
+> The original title, technology list, and paragraph below are future examples,
+> not approved current claims. In particular, “deployed,” “AWS EC2,”
+> “CloudWatch,” and “HTTPS” require their matching evidence; HTTPS is currently
+> deferred. Use the current wording in `docs/PORTFOLIO.md` instead.
+
 Suggested project title:
 
 **MangaHub — AWS DevSecOps Deployment**
@@ -1812,32 +1843,32 @@ Only claim technologies that are actually implemented.
 | 6 | Docker networking | ✅ |
 | 7 | Nginx | ✅ |
 | 8 | Local production test | ✅ |
-| 9 | Security scanning | ✅ Local gates passed |
+| 9 | Security scanning | ✅ Local and remote branch gates passed |
 | 10 | CI refactor | ✅ Implemented; branch pipeline reruns for every push |
 | 11 | AWS account | ⬜ |
 | 12 | AWS VPC | ⬜ |
 | 13 | Security Group | ⬜ |
 | 14 | EC2 | ⬜ |
 | 15 | Manual deployment | ⬜ |
-| 16 | Secrets | ⬜ |
-| 17 | CI/CD | ⬜ |
-| 18 | Immutable images | ⬜ |
-| 19 | Deploy script | ⬜ |
-| 20 | Health checks | ⬜ |
-| 21 | Rollback | ⬜ |
-| 22 | HTTPS | ⬜ |
+| 16 | Secrets | 🟨 Protected runtime path implemented; EC2 proof pending |
+| 17 | CI/CD | 🟨 CI/security/publish verified; EC2 CD intentionally pending |
+| 18 | Immutable images | ✅ Matching public full-SHA backend/frontend images verified |
+| 19 | Deploy script | ✅ Implemented and locally rehearsed |
+| 20 | Health checks | ✅ Implemented and locally verified |
+| 21 | Rollback | 🟨 Two-version local proof passed; EC2 proof pending |
+| 22 | HTTPS | ➖ Deferred: domain-free HTTP demo decision |
 | 23 | Monitoring | 🟨 Repository prepared; AWS proof pending |
-| 24 | SQLite backup | ⬜ |
-| 25 | Security hardening | ⬜ |
-| 26 | CORS | ⬜ |
-| 27 | Rate limiting | ⬜ |
-| 28 | Image tagging | ⬜ |
+| 24 | SQLite backup | 🟨 Local backup/restore proof passed; EC2 proof pending |
+| 25 | Security hardening | 🟨 Repository/container controls verified; AWS controls pending |
+| 26 | CORS | ✅ Explicit origins implemented and directly tested |
+| 27 | Rate limiting | ✅ Public/auth tiers and health exemption directly tested |
+| 28 | Image tagging | ✅ Full-SHA deployment tags verified |
 | 29 | PR validation | ⬜ |
-| 30 | Final CI/CD test | ⬜ |
-| 31 | Failure testing | ⬜ |
-| 32 | Documentation | ⬜ |
-| 33 | Architecture diagram | ⬜ |
-| 34 | CV/portfolio | ⬜ |
+| 30 | Final CI/CD test | 🟨 Branch pipeline passes; PR/merge/EC2 delivery pending |
+| 31 | Failure testing | 🟨 Local failures rehearsed; EC2 restart/failures pending |
+| 32 | Documentation | 🟨 Repository set prepared; AWS evidence pending |
+| 33 | Architecture diagram | 🟨 Target diagram prepared; AWS boundary pending proof |
+| 34 | CV/portfolio | 🟨 Truthful templates prepared; deployed claim withheld |
 
 ---
 
@@ -2082,6 +2113,11 @@ Codex should execute the work in this order:
 
 # 44. Final Project Architecture
 
+> This original future-state sketch is retained as plan history, not current
+> evidence. It assumes the example branch, merge-first delivery, and HTTPS.
+> `docs/AWS_ARCHITECTURE.md` is the authoritative diagram for the accepted
+> `features/devsecops`, manual-first, domain-free design.
+
 ```text
                          ┌──────────────────────┐
                          │       Developer      │
@@ -2215,6 +2251,9 @@ This keeps application problems, Docker problems, and AWS infrastructure problem
 ---
 
 # 46. Current Starting Status
+
+> This section is the historical starting baseline from before the DevSecOps
+> work. Use the Master Phase Matrix and `docs/DEVSECOPS.md` for current status.
 
 Based on the repository inspection:
 

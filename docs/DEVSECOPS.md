@@ -42,7 +42,9 @@ This is an accepted project decision, not a second branch to create.
 | Phase 22: HTTPS | Deferred by project decision | A domain and certificate are intentionally absent; HTTP is limited to disposable demo credentials |
 | Phase 23: AWS monitoring | Repository path implemented; EC2 verification pending | Scoped instance policy, CloudWatch Agent memory/disk metrics, Docker log override, health/container timer, seven-day retention contract, alarms, and failure rehearsal runbook |
 | Phase 24: SQLite backup/recovery | Implemented; isolated local restore rehearsal passed | Online WAL-safe copy, integrity/checksum verification, separate volume, retention, pre-restore point, atomic restore, failure guard, and health gate |
-| Phase 25 onward | Partially implemented | Existing container/application hardening is verified; AWS controls, final audit, architecture evidence, and PR remain pending |
+| Phases 25-28: hardening, CORS, rate limits, tagging | Repository controls implemented and locally verified | Hardened Compose, explicit production origins/trusted proxy, direct public/auth rate-limit tests, and full-SHA image publication |
+| Phases 29-31: PR, final delivery, failures | Partially implemented | Branch CI and local failure/rollback/recovery gates pass; PR, merge, EC2 deployment, and EC2 restart evidence remain pending |
+| Phases 32-34: documentation and portfolio | Prepared; AWS claim gate pending | Target architecture, evidence matrix, known limitations, and current/future CV wording distinguish verified work from AWS execution |
 
 ## Delivery gates
 
@@ -78,6 +80,9 @@ docs/AWS_DEPLOYMENT.md    hands-on account, network, EC2, and deployment guide
 docs/ROLLBACK.md          non-destructive rollback procedure and failure handling
 docs/BACKUP.md            verified SQLite backup, restore, retention, and evidence
 docs/MONITORING.md        bounded CloudWatch metrics, logs, alarms, and rehearsal
+docs/AWS_ARCHITECTURE.md  verified-versus-pending delivery and AWS topology
+docs/AWS_EVIDENCE.md      sanitized checkpoint proof and final claim gate
+docs/PORTFOLIO.md         truthful current and post-verification CV wording
 ```
 
 Local development continues to use the root `docker-compose.yml`. Production
@@ -87,8 +92,8 @@ understand.
 ## Portfolio claims policy
 
 The README, CV description, diagrams, and screenshots may mention a technology
-or control only after it is implemented and verified. Planned HTTPS, S3 backup,
-CloudWatch must stay labeled as prepared—not AWS-verified—until metrics, logs,
-alarms, notification, and the controlled EC2 failure rehearsal pass. Security
-scanners or automated deployment must stay labeled as planned until their gates
-pass.
+or control only after it is implemented and verified. HTTPS, S3 backup,
+automated EC2 deployment, and CloudWatch execution must stay labeled as planned
+or prepared—not AWS-verified—until their own gates pass. Metrics, logs, alarms,
+notification, and the controlled EC2 failure rehearsal are required before the
+CloudWatch claim changes. `docs/AWS_EVIDENCE.md` is the final claim boundary.

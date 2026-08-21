@@ -44,7 +44,11 @@ they are manually verified. The immutable deployment and recovery contract is
 documented in [`docs/ROLLBACK.md`](docs/ROLLBACK.md), while the WAL-safe SQLite
 procedure and proof are in [`docs/BACKUP.md`](docs/BACKUP.md). The bounded
 CloudWatch design and pending EC2 proof are in
-[`docs/MONITORING.md`](docs/MONITORING.md).
+[`docs/MONITORING.md`](docs/MONITORING.md). The verified-versus-pending AWS
+topology, evidence gate, and truthful CV wording are kept separately in
+[`docs/AWS_ARCHITECTURE.md`](docs/AWS_ARCHITECTURE.md),
+[`docs/AWS_EVIDENCE.md`](docs/AWS_EVIDENCE.md), and
+[`docs/PORTFOLIO.md`](docs/PORTFOLIO.md).
 
 ---
 

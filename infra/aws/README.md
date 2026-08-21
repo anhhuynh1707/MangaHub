@@ -6,6 +6,10 @@ it does not claim that any AWS resource already exists.
 Follow the click-by-click beginner procedure in
 [`docs/AWS_DEPLOYMENT.md`](../../docs/AWS_DEPLOYMENT.md). This file remains the
 compact architecture and cost rationale; the runbook is the operational source.
+The final target diagram and its verification boundary are in
+[`docs/AWS_ARCHITECTURE.md`](../../docs/AWS_ARCHITECTURE.md), while
+[`docs/AWS_EVIDENCE.md`](../../docs/AWS_EVIDENCE.md) controls when planned AWS
+nodes may be represented as deployed.
 
 ## Goal and scope
 
