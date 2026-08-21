@@ -14,7 +14,8 @@ path, so it pulls the old immutable images and repeats the same checks.
   replacement.
 - `/opt/mangahub/.env` is reused; rollback does not expose or rotate the JWT
   secret.
-- The previous release includes its mode: `base` or owner-only `raw`.
+- The previous release includes its mode: `base`, owner-only `raw`,
+  `cloudwatch`, or `raw-cloudwatch`.
 - A failed candidate does not advance `current-version`.
 - Image rollback is not database rollback. Back up SQLite before any schema or
   destructive data change.
@@ -74,6 +75,15 @@ owner IPv4 `/32` rules:
 
 ```bash
 sudo ./deploy/scripts/rollback.sh FULL_40_CHARACTER_SHA --with-raw
+```
+
+Preserve CloudWatch logging only after its scoped instance policy and seven-day
+log group are verified:
+
+```bash
+sudo ./deploy/scripts/rollback.sh FULL_40_CHARACTER_SHA --with-cloudwatch
+sudo ./deploy/scripts/rollback.sh \
+  FULL_40_CHARACTER_SHA --with-raw --with-cloudwatch
 ```
 
 Use only a SHA whose GitHub Actions run passed and whose matching backend and

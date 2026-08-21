@@ -1,0 +1,45 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublishMangaHubMetricsOnly",
+      "Effect": "Allow",
+      "Action": "cloudwatch:PutMetricData",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": "MangaHub/EC2"
+        }
+      }
+    },
+    {
+      "Sid": "InspectLogGroupConfiguration",
+      "Effect": "Allow",
+      "Action": "logs:DescribeLogGroups",
+      "Resource": "*"
+    },
+    {
+      "Sid": "InspectMangaHubLogStreamsOnly",
+      "Effect": "Allow",
+      "Action": "logs:DescribeLogStreams",
+      "Resource": "arn:aws:logs:ap-southeast-2:*:log-group:/mangahub/demo/containers"
+    },
+    {
+      "Sid": "WriteMangaHubContainerStreamsOnly",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:ap-southeast-2:*:log-group:/mangahub/demo/containers:log-stream:mangahub-prod/edge",
+        "arn:aws:logs:ap-southeast-2:*:log-group:/mangahub/demo/containers:log-stream:mangahub-prod/frontend",
+        "arn:aws:logs:ap-southeast-2:*:log-group:/mangahub/demo/containers:log-stream:mangahub-prod/api",
+        "arn:aws:logs:ap-southeast-2:*:log-group:/mangahub/demo/containers:log-stream:mangahub-prod/redis",
+        "arn:aws:logs:ap-southeast-2:*:log-group:/mangahub/demo/containers:log-stream:mangahub-prod/tcp",
+        "arn:aws:logs:ap-southeast-2:*:log-group:/mangahub/demo/containers:log-stream:mangahub-prod/udp",
+        "arn:aws:logs:ap-southeast-2:*:log-group:/mangahub/demo/containers:log-stream:mangahub-prod/grpc"
+      ]
+    }
+  ]
+}

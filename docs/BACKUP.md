@@ -71,7 +71,8 @@ Restore deliberately causes brief downtime. The script:
 4. stops the edge, API, TCP, UDP, and gRPC services;
 5. removes only stale SQLite WAL/SHM sidecars;
 6. atomically replaces the main database;
-7. restarts the same recorded application SHA and base/raw mode;
+7. restarts the same recorded application SHA and its recorded base, raw,
+   CloudWatch, or combined mode;
 8. verifies every service plus the public health gate;
 9. records the target and recovery-point names in `restores.tsv`.
 

@@ -44,7 +44,9 @@ release_sha="$(<"$STATE_DIR/current-version")"
 release_mode="base"
 [[ -f "$STATE_DIR/current-mode" ]] && release_mode="$(<"$STATE_DIR/current-mode")"
 [[ "$release_sha" =~ ^[0-9a-f]{40}$ ]] || fail "recorded release is not a full Git SHA"
-[[ "$release_mode" == "base" || "$release_mode" == "raw" ]] || fail "recorded release mode is invalid"
+[[ "$release_mode" == "base" || "$release_mode" == "raw" \
+  || "$release_mode" == "cloudwatch" || "$release_mode" == "raw-cloudwatch" ]] \
+  || fail "recorded release mode is invalid"
 readonly RELEASE_SHA="$release_sha"
 readonly RELEASE_MODE="$release_mode"
 
@@ -57,8 +59,11 @@ export MANGAHUB_IMAGE="${BACKEND_REPOSITORY}:sha-${RELEASE_SHA}"
 export MANGAHUB_FRONTEND_IMAGE="${FRONTEND_REPOSITORY}:sha-${RELEASE_SHA}"
 
 compose_files=( -f "$DEPLOY_DIR/docker/docker-compose.prod.yml" )
-if [[ "$RELEASE_MODE" == "raw" ]]; then
+if [[ "$RELEASE_MODE" == "raw" || "$RELEASE_MODE" == "raw-cloudwatch" ]]; then
   compose_files+=( -f "$DEPLOY_DIR/docker/docker-compose.raw.yml" )
+fi
+if [[ "$RELEASE_MODE" == "cloudwatch" || "$RELEASE_MODE" == "raw-cloudwatch" ]]; then
+  compose_files+=( -f "$DEPLOY_DIR/docker/docker-compose.cloudwatch.yml" )
 fi
 
 compose() {

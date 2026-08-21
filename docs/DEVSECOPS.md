@@ -30,17 +30,17 @@ This is an accepted project decision, not a second branch to create.
 | Checklist area | State | Evidence |
 |---|---|---|
 | Phase 0: baseline | Historical baseline exists; full gate will be rerun before production changes | Existing CI and local Compose |
-| Phase 1: branch | Branch complete; remote CI rerun pending push | `features/devsecops` tracks `origin/features/devsecops`; CI now includes this branch |
+| Phase 1: branch | Complete and remotely verified | `features/devsecops` tracks `origin/features/devsecops`; CI includes this branch and reruns for every push |
 | Phase 2: structure | Complete | `deploy/`, `infra/aws/`, this record, and security policy |
 | Phases 3-7: production runtime | Complete and locally verified | Separate Compose/overrides, same-origin `/api`, hardened images, private networks, and edge Nginx |
 | Phase 8: local production test | Complete | Production-edge Playwright journey, HTTP health/security, raw TCP/UDP/gRPC, restart persistence, container hardening, and logs passed on 2026-08-21 |
 | Phase 9: security scanning | Implemented and locally verified | Govulncheck, npm audit, Gitleaks history, Trivy repository/image scans, pinned actions, and Dependabot |
-| Phase 10: CI refactor | Implemented; branch gates and candidate publication passed at `675ff8a` | Existing tests/builds remain; candidate GHCR publishing requires security, Docker, E2E, and deployment-script gates |
+| Phase 10: CI refactor | Implemented; branch gates and candidate publication pass at the current verified tip | Existing tests/builds remain; candidate GHCR publishing requires security, Docker, E2E, and deployment-script gates |
 | Phases 11-14: AWS foundation | Beginner console runbook ready; manual execution pending | `docs/AWS_DEPLOYMENT.md` covers account security, budget, IAM role, VPC, Security Group, EC2, SSM, Docker, and cost checkpoints |
-| Phases 15-17: manual EC2 deployment | Runbook and public candidate images ready; AWS execution pending | Matching anonymous backend/frontend `sha-675ff8a…` manifests and the full CI run are verified |
+| Phases 15-17: manual EC2 deployment | Runbook and public candidate images ready; AWS execution pending | Matching anonymous backend/frontend full-SHA manifests are verified after each successful branch-tip run |
 | Phases 18-21: immutable release, health, rollback | Implemented; two-version local rollback rehearsal passed | `675ff8a…` deployed, `d547361…` restored, the same SQLite inode remained, and HTTP/TCP/UDP/gRPC checks passed |
 | Phase 22: HTTPS | Deferred by project decision | A domain and certificate are intentionally absent; HTTP is limited to disposable demo credentials |
-| Phase 23: AWS monitoring | Not implemented yet | CloudWatch agent, alarms, and retention remain pending AWS infrastructure |
+| Phase 23: AWS monitoring | Repository path implemented; EC2 verification pending | Scoped instance policy, CloudWatch Agent memory/disk metrics, Docker log override, health/container timer, seven-day retention contract, alarms, and failure rehearsal runbook |
 | Phase 24: SQLite backup/recovery | Implemented; isolated local restore rehearsal passed | Online WAL-safe copy, integrity/checksum verification, separate volume, retention, pre-restore point, atomic restore, failure guard, and health gate |
 | Phase 25 onward | Partially implemented | Existing container/application hardening is verified; AWS controls, final audit, architecture evidence, and PR remain pending |
 
@@ -63,8 +63,8 @@ Work proceeds in small commits and stops on a failed gate:
 7. Pull request: no secrets or local artifacts, CI/security gates pass, and the
    architecture diagram matches the implementation.
 
-Latest verified branch run:
-<https://github.com/anhhuynh1707/MangaHub/actions/runs/32504720648>.
+Current branch verification history:
+<https://github.com/anhhuynh1707/MangaHub/actions/workflows/ci.yml?query=branch%3Afeatures%2Fdevsecops>.
 
 ## Repository layout
 
@@ -77,6 +77,7 @@ docs/SECURITY.md          security boundaries and operator rules
 docs/AWS_DEPLOYMENT.md    hands-on account, network, EC2, and deployment guide
 docs/ROLLBACK.md          non-destructive rollback procedure and failure handling
 docs/BACKUP.md            verified SQLite backup, restore, retention, and evidence
+docs/MONITORING.md        bounded CloudWatch metrics, logs, alarms, and rehearsal
 ```
 
 Local development continues to use the root `docker-compose.yml`. Production
@@ -87,5 +88,7 @@ understand.
 
 The README, CV description, diagrams, and screenshots may mention a technology
 or control only after it is implemented and verified. Planned HTTPS, S3 backup,
-CloudWatch agents, security scanners, or automated deployment must stay labeled
-as planned until their gates pass.
+CloudWatch must stay labeled as prepared—not AWS-verified—until metrics, logs,
+alarms, notification, and the controlled EC2 failure rehearsal pass. Security
+scanners or automated deployment must stay labeled as planned until their gates
+pass.

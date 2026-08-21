@@ -34,7 +34,13 @@ jobs:
           persist-credentials: false
 
       - name: Check Bash syntax
-        run: bash -n deploy/scripts/*.sh
+        run: bash -n deploy/scripts/*.sh deploy/tests/*.sh
+
+      - name: Validate monitoring JSON
+        run: >-
+          jq empty
+          deploy/aws/MangaHubDemoCloudWatchPolicy.json
+          deploy/cloudwatch/amazon-cloudwatch-agent.json
 
       - name: Lint deployment scripts
         run: >-
@@ -42,7 +48,10 @@ jobs:
           -v "$PWD:/workspace:ro"
           -w /workspace
           koalaman/shellcheck-alpine@sha256:9955be09ea7f0dbf7ae942ac1f2094355bb30d96fffba0ec09f5432207544002
-          shellcheck --severity=warning deploy/scripts/*.sh
+          shellcheck --severity=warning deploy/scripts/*.sh deploy/tests/*.sh
+
+      - name: Test health metric publisher
+        run: sudo ./deploy/tests/publish-health-metrics.test.sh
 
   # ── Backend ───────────────────────────────────────────────────────
   build-and-test:
@@ -238,6 +247,22 @@ jobs:
           -f deploy/docker/docker-compose.prod.local.yml
           -f deploy/docker/docker-compose.raw.yml
           config --quiet
+
+      - name: Validate CloudWatch Compose modes
+        env:
+          PUBLIC_ORIGIN: http://localhost:8088
+          HOST_HTTP_PORT: "8088"
+          RAW_BIND_ADDRESS: 127.0.0.1
+        run: |
+          docker compose \
+            -f deploy/docker/docker-compose.prod.yml \
+            -f deploy/docker/docker-compose.cloudwatch.yml \
+            config --quiet
+          docker compose \
+            -f deploy/docker/docker-compose.prod.yml \
+            -f deploy/docker/docker-compose.raw.yml \
+            -f deploy/docker/docker-compose.cloudwatch.yml \
+            config --quiet
 
       - name: Start all services
         run: docker compose up -d

@@ -1354,6 +1354,13 @@ Checklist:
 
 # 28. PHASE 23 — AWS Monitoring
 
+> **Current project status (2026-08-22):** The scoped IAM policy, CloudWatch
+> Agent configuration, opt-in Docker logging, health publisher, alarms runbook,
+> retention rule, and controlled-failure procedure are prepared in the
+> repository. Keep the checklist below unchecked until the metrics, logs,
+> notification, alarm transition, and recovery are observed on the real EC2
+> instance in Sydney. See `docs/MONITORING.md`.
+
 Monitor:
 
 ```text
@@ -1797,7 +1804,7 @@ Only claim technologies that are actually implemented.
 | Phase | Area | Status |
 |---|---|---|
 | 0 | Baseline verification | ✅ |
-| 1 | DevSecOps branch | 🟨 Branch complete; CI gate pending PR |
+| 1 | DevSecOps branch | ✅ `features/devsecops` is active and remotely verified |
 | 2 | Repository structure | ✅ |
 | 3 | Production Docker | ✅ |
 | 4 | Production frontend | ✅ |
@@ -1806,7 +1813,7 @@ Only claim technologies that are actually implemented.
 | 7 | Nginx | ✅ |
 | 8 | Local production test | ✅ |
 | 9 | Security scanning | ✅ Local gates passed |
-| 10 | CI refactor | 🟨 Implemented locally; remote run pending push |
+| 10 | CI refactor | ✅ Implemented; branch pipeline reruns for every push |
 | 11 | AWS account | ⬜ |
 | 12 | AWS VPC | ⬜ |
 | 13 | Security Group | ⬜ |
@@ -1819,7 +1826,7 @@ Only claim technologies that are actually implemented.
 | 20 | Health checks | ⬜ |
 | 21 | Rollback | ⬜ |
 | 22 | HTTPS | ⬜ |
-| 23 | Monitoring | ⬜ |
+| 23 | Monitoring | 🟨 Repository prepared; AWS proof pending |
 | 24 | SQLite backup | ⬜ |
 | 25 | Security hardening | ⬜ |
 | 26 | CORS | ⬜ |
@@ -2227,7 +2234,7 @@ AWS VPC                        NOT COMPLETE
 EC2 deployment                 NOT COMPLETE
 CD                             NOT COMPLETE
 HTTPS                          NOT COMPLETE
-Monitoring                     NOT COMPLETE
+Monitoring                     REPOSITORY PREPARED; AWS PROOF PENDING
 Backup/recovery                NOT COMPLETE
 Rollback                       NOT COMPLETE
 ```

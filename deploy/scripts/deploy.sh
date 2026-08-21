@@ -12,7 +12,7 @@ readonly BACKEND_REPOSITORY="${MANGAHUB_BACKEND_REPOSITORY:-ghcr.io/anhhuynh1707
 readonly FRONTEND_REPOSITORY="${MANGAHUB_FRONTEND_REPOSITORY:-ghcr.io/anhhuynh1707/mangahub-frontend}"
 
 usage() {
-  echo "Usage: sudo $0 <full-git-sha> [--with-raw]" >&2
+  echo "Usage: sudo $0 <full-git-sha> [--with-raw] [--with-cloudwatch]" >&2
 }
 
 fail() {
@@ -21,12 +21,33 @@ fail() {
 }
 
 [[ "${EUID}" -eq 0 ]] || fail "run this command with sudo"
-[[ $# -ge 1 && $# -le 2 ]] || { usage; exit 2; }
+[[ $# -ge 1 && $# -le 3 ]] || { usage; exit 2; }
 
 readonly RELEASE_SHA="$1"
-readonly MODE="${2:-base}"
 [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "release must be a full 40-character lowercase Git SHA"
-[[ "$MODE" == "base" || "$MODE" == "--with-raw" ]] || { usage; exit 2; }
+shift
+
+raw_enabled=false
+cloudwatch_enabled=false
+for option in "$@"; do
+  case "$option" in
+    --with-raw)
+      [[ "$raw_enabled" == false ]] || fail "--with-raw was provided more than once"
+      raw_enabled=true
+      ;;
+    --with-cloudwatch)
+      [[ "$cloudwatch_enabled" == false ]] || fail "--with-cloudwatch was provided more than once"
+      cloudwatch_enabled=true
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+done
+readonly RAW_ENABLED="$raw_enabled"
+readonly CLOUDWATCH_ENABLED="$cloudwatch_enabled"
+
 [[ "$COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "MANGAHUB_COMPOSE_PROJECT is invalid"
 [[ -f "$ENV_FILE" ]] || fail "missing $ENV_FILE; run configure-server.sh first"
 [[ ! -L "$ENV_FILE" ]] || fail "$ENV_FILE must not be a symbolic link"
@@ -58,9 +79,17 @@ compose_files=(
   -f "$DEPLOY_DIR/docker/docker-compose.prod.yml"
 )
 mode_name="base"
-if [[ "$MODE" == "--with-raw" ]]; then
+if [[ "$RAW_ENABLED" == true ]]; then
   compose_files+=( -f "$DEPLOY_DIR/docker/docker-compose.raw.yml" )
   mode_name="raw"
+fi
+if [[ "$CLOUDWATCH_ENABLED" == true ]]; then
+  compose_files+=( -f "$DEPLOY_DIR/docker/docker-compose.cloudwatch.yml" )
+  if [[ "$RAW_ENABLED" == true ]]; then
+    mode_name="raw-cloudwatch"
+  else
+    mode_name="cloudwatch"
+  fi
 fi
 
 compose() {

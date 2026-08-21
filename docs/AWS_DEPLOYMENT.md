@@ -157,8 +157,8 @@ human login and contains no access key.
 AWS lists these exact steps under the instance-profile alternative in [Configure
 instance permissions required for Systems
 Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/setup-instance-permissions.html).
-Do not attach S3 or CloudWatch permissions yet; they are added only when those
-features are implemented.
+Do not attach S3 or CloudWatch permissions at this checkpoint. The narrowly
+scoped monitoring policy is added only at Checkpoint K; S3 remains unimplemented.
 
 ## Checkpoint C — create the learning VPC manually
 
@@ -299,6 +299,16 @@ instance**.
 set -euxo pipefail
 dnf upgrade -y
 dnf install -y docker git jq curl openssl util-linux
+install -d -m 0755 /etc/docker
+cat > /etc/docker/daemon.json <<'JSON'
+{
+  "log-driver": "local",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+JSON
 systemctl enable --now docker
 ```
 
@@ -507,6 +517,42 @@ disk, so export a wanted backup off the instance before termination. The future
 S3 export is not implemented yet. See `docs/BACKUP.md` for the recovery model
 and failure rules.
 
+## Checkpoint K — enable and prove CloudWatch monitoring
+
+Do this only after the immutable deployment and recovery checkpoints pass.
+
+1. In **IAM → Policies**, create customer-managed policy
+   `MangaHubDemoCloudWatchPolicy` using the exact JSON in
+   `deploy/aws/MangaHubDemoCloudWatchPolicy.json`.
+2. Attach that policy to `MangaHubDemoEC2Role`; keep
+   `AmazonSSMManagedInstanceCore` attached. Do not attach an administrator
+   CloudWatch policy.
+3. In **CloudWatch → Logs → Log groups**, create
+   `/mangahub/demo/containers` in Sydney with **Standard** class, AWS-managed
+   encryption, **7 days** retention, and the project tags.
+4. In Session Manager, configure the agent/timer and redeploy the recorded SHA:
+
+```bash
+cd /opt/mangahub-src
+sudo ./deploy/scripts/configure-monitoring.sh
+
+CURRENT_SHA="$(sudo sed -n '1p' /var/lib/mangahub-deploy/current-version)"
+sudo ./deploy/scripts/deploy.sh "$CURRENT_SHA" --with-cloudwatch
+```
+
+5. Confirm `mem_used_percent`, root `disk_used_percent`,
+   `ApplicationHealthy=1`, and `HealthyContainers=7` under custom namespace
+   `MangaHub/EC2`; confirm all seven expected container log streams exist.
+6. Create the five standard alarms and confirmed SNS email notification listed
+   in `docs/MONITORING.md`.
+7. Run its controlled edge-container failure. The application alarm must change
+   to `ALARM`, immutable redeployment must recover it without deleting volumes,
+   and the alarm must return to `OK`.
+
+The detailed IAM boundary, commands, alarm thresholds, privacy rules, evidence,
+and cleanup procedure are in `docs/MONITORING.md`. Until this EC2 rehearsal
+passes, monitoring is prepared but must not be represented as AWS-verified.
+
 ## HTTP, HTTPS, and the raw protocols
 
 HTTPS does not disable TCP, UDP, or gRPC. They are separate listeners:
@@ -536,20 +582,28 @@ the [official VPC pricing page](https://aws.amazon.com/vpc/pricing/) before laun
   some other resources can still cost money.
 - A normal auto-assigned EC2 public IPv4 can change after stop/start. If it does,
   replace only the `PUBLIC_ORIGIN` line without displaying the protected file,
-  then redeploy the recorded release in base mode:
+  then redeploy the recorded release in its recorded mode:
 
   ```bash
   NEW_PUBLIC_IPV4=REPLACE_WITH_NEW_EC2_IPV4
   sudo sed -i "s|^PUBLIC_ORIGIN=.*|PUBLIC_ORIGIN=http://${NEW_PUBLIC_IPV4}|" /opt/mangahub/.env
   sudo chmod 0600 /opt/mangahub/.env
   CURRENT_SHA="$(sudo sed -n '1p' /var/lib/mangahub-deploy/current-version)"
+  CURRENT_MODE="$(sudo sed -n '1p' /var/lib/mangahub-deploy/current-mode)"
   cd /opt/mangahub-src
-  sudo ./deploy/scripts/deploy.sh "$CURRENT_SHA"
+  case "$CURRENT_MODE" in
+    base) sudo ./deploy/scripts/deploy.sh "$CURRENT_SHA" ;;
+    raw) sudo ./deploy/scripts/deploy.sh "$CURRENT_SHA" --with-raw ;;
+    cloudwatch) sudo ./deploy/scripts/deploy.sh "$CURRENT_SHA" --with-cloudwatch ;;
+    raw-cloudwatch) sudo ./deploy/scripts/deploy.sh "$CURRENT_SHA" --with-raw --with-cloudwatch ;;
+    *) echo "Unexpected mode: $CURRENT_MODE" >&2 ;;
+  esac
   ```
 
-  Use the new browser URL. Re-enable raw mode only after the owner-only rules are
-  reviewed again. Separately, if the owner's home/public IPv4 changes, update
-  the three Security Group `/32` sources before the next raw protocol demo.
+  Use the new browser URL. The command preserves the recorded logging mode.
+  Preserve raw mode only after its owner-only rules are reviewed again.
+  Separately, if the owner's home/public IPv4 changes, update the three Security
+  Group `/32` sources before the next raw protocol demo.
 - Do not allocate an Elastic IP for this first lab.
 - **Terminate** only after any wanted SQLite backup is verified. Termination is
   destructive when delete-on-termination is enabled.

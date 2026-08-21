@@ -1,0 +1,58 @@
+x-cloudwatch-options: &cloudwatch-options
+  awslogs-region: "${MANGAHUB_AWS_REGION:-ap-southeast-2}"
+  awslogs-group: "${MANGAHUB_CLOUDWATCH_LOG_GROUP:-/mangahub/demo/containers}"
+  awslogs-create-group: "false"
+  awslogs-create-stream: "true"
+  awslogs-force-flush-interval-seconds: "5"
+  mode: non-blocking
+  max-buffer-size: 4m
+
+services:
+  edge:
+    logging:
+      driver: awslogs
+      options:
+        <<: *cloudwatch-options
+        awslogs-stream: "mangahub-prod/edge"
+
+  frontend:
+    logging:
+      driver: awslogs
+      options:
+        <<: *cloudwatch-options
+        awslogs-stream: "mangahub-prod/frontend"
+
+  mangahub-api:
+    logging:
+      driver: awslogs
+      options:
+        <<: *cloudwatch-options
+        awslogs-stream: "mangahub-prod/api"
+
+  redis:
+    logging:
+      driver: awslogs
+      options:
+        <<: *cloudwatch-options
+        awslogs-stream: "mangahub-prod/redis"
+
+  mangahub-tcp:
+    logging:
+      driver: awslogs
+      options:
+        <<: *cloudwatch-options
+        awslogs-stream: "mangahub-prod/tcp"
+
+  mangahub-udp:
+    logging:
+      driver: awslogs
+      options:
+        <<: *cloudwatch-options
+        awslogs-stream: "mangahub-prod/udp"
+
+  mangahub-grpc:
+    logging:
+      driver: awslogs
+      options:
+        <<: *cloudwatch-options
+        awslogs-stream: "mangahub-prod/grpc"

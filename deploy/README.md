@@ -30,20 +30,32 @@ Files are added only when they have a real purpose:
 
 ```text
 deploy/
+├── aws/
+│   └── MangaHubDemoCloudWatchPolicy.json # scoped metrics/log-write policy
+├── cloudwatch/
+│   └── amazon-cloudwatch-agent.json # memory and root-disk metrics
 ├── docker/
 │   ├── docker-compose.prod.yml        # production runtime definition
 │   ├── docker-compose.prod.local.yml  # local image-build override
 │   ├── docker-compose.raw.yml         # opt-in TCP/UDP/gRPC host bindings
+│   ├── docker-compose.cloudwatch.yml  # opt-in bounded CloudWatch log streams
 │   └── .env.example                   # placeholders and documented inputs
 ├── nginx/
 │   └── nginx.conf                     # edge, REST, WebSocket, and SSE routing
-└── scripts/
-    ├── configure-server.sh            # create protected first-run environment
-    ├── deploy.sh                      # pull and start one exact full-SHA release
-    ├── healthcheck.sh                 # behavior and exposure gate
-    ├── rollback.sh                    # redeploy the previously recorded SHA
-    ├── backup.sh                      # online SQLite backup, integrity, checksum, retention
-    └── restore.sh                     # offline atomic restore with automatic recovery
+├── scripts/
+│   ├── configure-server.sh            # create protected first-run environment
+│   ├── configure-monitoring.sh        # validate and install EC2 monitoring
+│   ├── deploy.sh                      # pull and start one exact full-SHA release
+│   ├── healthcheck.sh                 # behavior and exposure gate
+│   ├── publish-health-metrics.sh      # one-minute app/container metric source
+│   ├── rollback.sh                    # redeploy the previously recorded SHA
+│   ├── backup.sh                      # online SQLite backup, integrity, checksum, retention
+│   └── restore.sh                     # offline atomic restore with automatic recovery
+├── tests/
+│   └── publish-health-metrics.test.sh # healthy/unhealthy metric contract
+└── systemd/
+    ├── mangahub-health-publisher.service
+    └── mangahub-health-publisher.timer
 ```
 
 The base production file never publishes raw service ports. Add
@@ -148,6 +160,16 @@ bindings for the same release:
 ```bash
 sudo ./deploy/scripts/deploy.sh FULL_40_CHARACTER_SHA --with-raw
 ```
+
+After the scoped policy, seven-day log group, CloudWatch Agent, and health timer
+are verified, enable monitoring without enabling raw Internet ports:
+
+```bash
+sudo ./deploy/scripts/deploy.sh FULL_40_CHARACTER_SHA --with-cloudwatch
+```
+
+Both flags can be combined, in either order, only while the owner-only raw
+Security Group rules are active. See `docs/MONITORING.md`.
 
 The deploy command pulls before changing containers, never builds on EC2, never
 uses `down -v`, and advances `/var/lib/mangahub-deploy/current-version` only

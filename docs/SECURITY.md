@@ -113,7 +113,10 @@ not permit a new token anywhere in the repository.
   the instance until a future encrypted S3 export is implemented, so they do
   not yet protect against instance or EBS loss.
 - Logs exclude authorization headers, JWTs, passwords, environment dumps, and
-  other secrets; CloudWatch retention is finite.
+  other secrets. The optional CloudWatch mode uses one private seven-day log
+  group, non-blocking Docker delivery, and a role scoped to that group and the
+  `MangaHub/EC2` metric namespace. Client IP and user IDs remain private
+  operational data and must not appear in portfolio screenshots.
 
 ## Stop-work conditions
 
