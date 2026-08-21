@@ -35,9 +35,11 @@ This is an accepted project decision, not a second branch to create.
 | Phases 3-7: production runtime | Locally verified; immutable release tags remain for CI/CD | Separate Compose/overrides, same-origin `/api`, hardened backend image, private networks, edge Nginx |
 | Phase 8: local production test | Complete | Production-edge Playwright journey, HTTP health/security, raw TCP/UDP/gRPC, restart persistence, container hardening, and logs passed on 2026-08-21 |
 | Phase 9: security scanning | Implemented and locally verified | Govulncheck, npm audit, Gitleaks history, Trivy repository/image scans, pinned actions, and Dependabot |
-| Phase 10: CI refactor | Implemented; branch gate passed at `b2e9a7e` | Existing tests/builds remain and candidate GHCR publishing requires security, Docker, and E2E gates; the publishing update needs its own remote rerun |
+| Phase 10: CI refactor | Implemented; branch gates and candidate publication passed at `d547361` | Existing tests/builds remain; candidate GHCR publishing requires security, Docker, E2E, and deployment-script gates |
 | Phases 11-14: AWS foundation | Beginner console runbook ready; manual execution pending | `docs/AWS_DEPLOYMENT.md` covers account security, budget, IAM role, VPC, Security Group, EC2, SSM, Docker, and cost checkpoints |
-| Phase 15 onward | Not implemented yet | Must not be presented as complete |
+| Phases 15-17: manual EC2 deployment | Runbook and public candidate images ready; AWS execution pending | Matching anonymous backend/frontend `sha-d547361…` manifests were verified before the deployment-script commit |
+| Phases 18-21: immutable release, health, rollback | Implemented and locally exercised; two-version rollback rehearsal pending | Protected first-run config plus pull-only deploy/health/rollback scripts; CI lint gate included |
+| Phase 22 onward | Not implemented yet | HTTPS requires a future domain; monitoring and backup remain planned and must not be presented as complete |
 
 ## Delivery gates
 
@@ -58,7 +60,7 @@ Work proceeds in small commits and stops on a failed gate:
 7. Pull request: no secrets or local artifacts, CI/security gates pass, and the
    architecture diagram matches the implementation.
 
-## Planned repository layout
+## Repository layout
 
 ```text
 .github/workflows/       CI, security gates, and controlled CD
@@ -67,7 +69,7 @@ infra/aws/               resource plan and step-by-step AWS runbook
 docs/DEVSECOPS.md         implementation record and phase evidence
 docs/SECURITY.md          security boundaries and operator rules
 docs/AWS_DEPLOYMENT.md    hands-on account, network, EC2, and deployment guide
-docs/ROLLBACK.md          tested rollback procedure (added with scripts)
+docs/ROLLBACK.md          non-destructive rollback procedure and failure handling
 ```
 
 Local development continues to use the root `docker-compose.yml`. Production

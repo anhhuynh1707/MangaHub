@@ -274,7 +274,7 @@ instance**.
 #!/bin/bash
 set -euxo pipefail
 dnf upgrade -y
-dnf install -y docker git jq curl openssl
+dnf install -y docker git jq curl openssl util-linux
 systemctl enable --now docker
 ```
 
@@ -354,6 +354,93 @@ Before deploying MangaHub, record these values without exposing credentials:
 Do not record the JWT secret, session cookies, temporary credentials, or account
 number in a public screenshot.
 
+## Checkpoint I — deploy one immutable candidate
+
+Do this only after the feature-branch GitHub Actions run is green and both GHCR
+packages contain `sha-<full-commit>` for the same commit.
+
+### I1. Make the two demo packages anonymously pullable
+
+1. On GitHub, open the MangaHub repository and its **Packages** section.
+2. Open the backend package `mangahub`, then **Package settings**.
+3. Confirm it is connected to this public repository and change visibility to
+   **Public** if needed.
+4. Repeat for `mangahub-frontend`.
+5. Do not create or copy a GitHub personal access token to EC2. Public GHCR
+   images can be pulled anonymously.
+
+### I2. Fetch only the deployment definition and pin its commit
+
+In Session Manager, replace `FULL_SHA` with the 40-character commit displayed by
+the successful Actions run:
+
+```bash
+cd /opt
+sudo git clone --branch features/devsecops --single-branch \
+  https://github.com/anhhuynh1707/MangaHub.git mangahub-src
+cd /opt/mangahub-src
+sudo git checkout --detach FULL_SHA
+git rev-parse HEAD
+```
+
+The last command must exactly equal `FULL_SHA`. Source exists only to provide
+versioned Compose, proxy, and operation files; EC2 does not build it.
+
+### I3. Generate the protected server environment
+
+Use the instance's current public IPv4 from the EC2 details page:
+
+```bash
+cd /opt/mangahub-src
+sudo ./deploy/scripts/configure-server.sh FULL_SHA PUBLIC_IPV4
+sudo stat -c '%a %U:%G %n' /opt/mangahub/.env
+```
+
+The `stat` result must start with `600`. Do not print or open the environment file
+in screenshots because it contains the JWT signing secret.
+
+### I4. Deploy and pass the HTTP gate
+
+```bash
+sudo ./deploy/scripts/deploy.sh FULL_SHA
+sudo docker compose \
+  --project-name mangahub-prod \
+  --env-file /opt/mangahub/.env \
+  -f deploy/docker/docker-compose.prod.yml \
+  ps
+```
+
+Open `http://PUBLIC_IPV4` in a browser and create only a disposable demo account
+with a password used nowhere else. The deployment is accepted only if the
+script reports that its health gate passed and every long-running service is
+running/healthy.
+
+### I5. Enable the raw protocol demonstration temporarily
+
+1. Add the three owner `/32` rules from Checkpoint D to the Security Group.
+2. Redeploy the same release with the opt-in raw override:
+
+```bash
+sudo ./deploy/scripts/deploy.sh FULL_SHA --with-raw
+```
+
+3. On the local Mac terminal, set the EC2 address for the CLI:
+
+```bash
+export MANGAHUB_API_URL=http://PUBLIC_IPV4/api
+export MANGAHUB_TCP_ADDR=PUBLIC_IPV4:9090
+export MANGAHUB_UDP_ADDR=PUBLIC_IPV4:9091
+export MANGAHUB_GRPC_ADDR=PUBLIC_IPV4:9092
+```
+
+4. Run the TCP, UDP, and gRPC demonstrations from the same owner network whose
+   `/32` is in the Security Group.
+5. Remove the three Security Group rules afterward. The containers can stay up;
+   AWS then drops all Internet traffic to those ports.
+
+For a later bad release, `sudo ./deploy/scripts/rollback.sh` redeploys the
+previously recorded SHA and runs the same health gate. It never deletes volumes.
+
 ## HTTP, HTTPS, and the raw protocols
 
 HTTPS does not disable TCP, UDP, or gRPC. They are separate listeners:
@@ -403,6 +490,6 @@ Before proceeding to image deployment, confirm all of the following:
 - [ ] Session Manager connects.
 - [ ] Docker Engine and `docker compose` work.
 
-The next deployment checkpoint will use an immutable `sha-<full-commit>` backend
-image and matching frontend image. It will not build source code on EC2 and will
-not use `latest` as the deployment source of truth.
+The deployment checkpoint uses an immutable `sha-<full-commit>` backend image
+and matching frontend image. It does not build source code on EC2 and does not
+use `latest` as the deployment source of truth.

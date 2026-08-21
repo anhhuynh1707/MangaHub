@@ -3,9 +3,9 @@
 This directory is the home of the production deployment for MangaHub. The
 existing root `docker-compose.yml` remains the local development stack.
 
-The production stack will be implemented and verified in later checklist
-phases. This file establishes the deployment contract before configuration is
-added, so local and AWS behavior do not become mixed together.
+The production stack and its local proof are implemented. The server scripts are
+locally validated; their first EC2 execution remains pending the manual AWS
+foundation checkpoint.
 
 ## Deployment contract
 
@@ -38,9 +38,10 @@ deploy/
 ├── nginx/
 │   └── nginx.conf                     # edge, REST, WebSocket, and SSE routing
 └── scripts/
-    ├── deploy.sh                      # added with the deployment phase
-    ├── healthcheck.sh                 # added with the health-check phase
-    ├── rollback.sh                    # added after manual deploy is proven
+    ├── configure-server.sh            # create protected first-run environment
+    ├── deploy.sh                      # pull and start one exact full-SHA release
+    ├── healthcheck.sh                 # behavior and exposure gate
+    ├── rollback.sh                    # redeploy the previously recorded SHA
     ├── backup.sh                      # added with tested SQLite backup
     └── restore.sh                     # added with tested recovery
 ```
@@ -123,3 +124,42 @@ Pull requests publish nothing. `main` publishes both its full-SHA images and the
 convenience `latest` tag. The first EC2 deployment remains manual; CD is added
 only after the same immutable images and production Compose stack have been
 proven manually.
+
+## EC2 script contract
+
+Run the scripts with `sudo` because Docker daemon access is root-equivalent. On
+the first server setup, `configure-server.sh` accepts the exact full Git SHA and
+the EC2 public IPv4 address. It writes `/opt/mangahub/.env` with mode `0600` and
+generates the JWT secret directly into that file without printing it:
+
+```bash
+sudo ./deploy/scripts/configure-server.sh FULL_40_CHARACTER_SHA PUBLIC_IPV4
+```
+
+Deploy the same backend/frontend SHA without raw host ports:
+
+```bash
+sudo ./deploy/scripts/deploy.sh FULL_40_CHARACTER_SHA
+```
+
+After the owner-only AWS Security Group rules exist, deliberately enable raw
+bindings for the same release:
+
+```bash
+sudo ./deploy/scripts/deploy.sh FULL_40_CHARACTER_SHA --with-raw
+```
+
+The deploy command pulls before changing containers, never builds on EC2, never
+uses `down -v`, and advances `/var/lib/mangahub-deploy/current-version` only
+after the public health, security-header, private-endpoint, Swagger, and frontend
+checks pass. If a later release fails, inspect its logs and restore the recorded
+previous release:
+
+```bash
+sudo ./deploy/scripts/rollback.sh
+```
+
+Rollback is unavailable until a known-good release has been followed by an
+attempted different release. See `docs/ROLLBACK.md` for the operator procedure.
+Backup and restore scripts remain a separate later gate; rollback is not a
+substitute for a SQLite backup.

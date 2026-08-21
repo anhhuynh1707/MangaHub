@@ -23,6 +23,27 @@ jobs:
     permissions:
       contents: read
 
+  operations:
+    name: Deployment script checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check Bash syntax
+        run: bash -n deploy/scripts/*.sh
+
+      - name: Lint deployment scripts
+        run: >-
+          docker run --rm
+          -v "$PWD:/workspace:ro"
+          -w /workspace
+          koalaman/shellcheck-alpine@sha256:9955be09ea7f0dbf7ae942ac1f2094355bb30d96fffba0ec09f5432207544002
+          shellcheck --severity=warning deploy/scripts/*.sh
+
   # ── Backend ───────────────────────────────────────────────────────
   build-and-test:
     name: Build & Test
@@ -248,7 +269,7 @@ jobs:
   publish:
     name: Publish immutable images to GHCR
     runs-on: ubuntu-latest
-    needs: [docker, e2e, security]
+    needs: [docker, e2e, security, operations]
     if: >-
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' ||

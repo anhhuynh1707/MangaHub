@@ -40,7 +40,8 @@ The AWS portfolio path is documented in the beginner-oriented
 [`docs/AWS_DEPLOYMENT.md`](docs/AWS_DEPLOYMENT.md). It uses a dedicated Sydney
 VPC, one EC2 instance, Session Manager instead of public SSH, and explicit cost
 and cleanup checkpoints; the document does not claim resources exist before
-they are manually verified.
+they are manually verified. The immutable deployment and recovery contract is
+documented in [`docs/ROLLBACK.md`](docs/ROLLBACK.md).
 
 ---
 
