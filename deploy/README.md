@@ -116,6 +116,10 @@ feature branch -> pull request -> CI and security gates -> main
      -> health verification -> record deployed version
 ```
 
-Feature branches and pull requests must not deploy production. The first EC2
-deployment will be manual; CD is added only after the same immutable images and
-production Compose stack have been proven manually.
+The selected `features/devsecops` branch may publish full-commit SHA candidate
+images after all gates pass so the requested manual EC2 proof can happen before
+the pull request. It never updates `latest` and never deploys automatically.
+Pull requests publish nothing. `main` publishes both its full-SHA images and the
+convenience `latest` tag. The first EC2 deployment remains manual; CD is added
+only after the same immutable images and production Compose stack have been
+proven manually.

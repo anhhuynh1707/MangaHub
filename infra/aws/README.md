@@ -3,6 +3,10 @@
 Status: **planned, not provisioned**. This document records the agreed design;
 it does not claim that any AWS resource already exists.
 
+Follow the click-by-click beginner procedure in
+[`docs/AWS_DEPLOYMENT.md`](../../docs/AWS_DEPLOYMENT.md). This file remains the
+compact architecture and cost rationale; the runbook is the operational source.
+
 ## Goal and scope
 
 Run MangaHub as a low-cost, single-instance portfolio demonstration in Asia

@@ -35,8 +35,9 @@ This is an accepted project decision, not a second branch to create.
 | Phases 3-7: production runtime | Locally verified; immutable release tags remain for CI/CD | Separate Compose/overrides, same-origin `/api`, hardened backend image, private networks, edge Nginx |
 | Phase 8: local production test | Complete | Production-edge Playwright journey, HTTP health/security, raw TCP/UDP/gRPC, restart persistence, container hardening, and logs passed on 2026-08-21 |
 | Phase 9: security scanning | Implemented and locally verified | Govulncheck, npm audit, Gitleaks history, Trivy repository/image scans, pinned actions, and Dependabot |
-| Phase 10: CI refactor | Implemented locally; remote run pending | Existing tests/builds remain and GHCR publish requires security, Docker, and E2E gates |
-| Phase 11 onward | Not implemented yet | Must not be presented as complete |
+| Phase 10: CI refactor | Implemented; branch gate passed at `b2e9a7e` | Existing tests/builds remain and candidate GHCR publishing requires security, Docker, and E2E gates; the publishing update needs its own remote rerun |
+| Phases 11-14: AWS foundation | Beginner console runbook ready; manual execution pending | `docs/AWS_DEPLOYMENT.md` covers account security, budget, IAM role, VPC, Security Group, EC2, SSM, Docker, and cost checkpoints |
+| Phase 15 onward | Not implemented yet | Must not be presented as complete |
 
 ## Delivery gates
 
@@ -65,7 +66,7 @@ deploy/                  production Compose, proxy, and operational scripts
 infra/aws/               resource plan and step-by-step AWS runbook
 docs/DEVSECOPS.md         implementation record and phase evidence
 docs/SECURITY.md          security boundaries and operator rules
-docs/AWS_DEPLOYMENT.md    hands-on deployment guide (added with implementation)
+docs/AWS_DEPLOYMENT.md    hands-on account, network, EC2, and deployment guide
 docs/ROLLBACK.md          tested rollback procedure (added with scripts)
 ```
 

@@ -950,9 +950,10 @@ Checklist:
 - [x] Preserve GHCR publishing.
 - [x] Add security jobs.
 - [x] PRs do not deploy production.
-- [x] Production publishing occurs only on intended production branch.
+- [x] Candidate SHA publishing occurs only on the selected feature branch or
+  `main`; pull requests publish nothing.
 - [x] Use immutable SHA tags.
-- [x] Keep `latest` only as a convenience tag if desired.
+- [x] Keep `latest` only as a `main` convenience tag.
 
 Phase 10 implementation is locally validated with Actionlint. The first remote
 branch run remains a gate after these changes are pushed; AWS deployment is not

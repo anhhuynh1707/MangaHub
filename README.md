@@ -36,6 +36,12 @@ build, Docker smoke test, Playwright E2E, Govulncheck, npm audit, Gitleaks,
 Trivy, and gated GHCR publishing), Dependabot, `openapi-typescript` +
 `swagger2openapi` (generated API types), Playwright (E2E).
 
+The AWS portfolio path is documented in the beginner-oriented
+[`docs/AWS_DEPLOYMENT.md`](docs/AWS_DEPLOYMENT.md). It uses a dedicated Sydney
+VPC, one EC2 instance, Session Manager instead of public SSH, and explicit cost
+and cleanup checkpoints; the document does not claim resources exist before
+they are manually verified.
+
 ---
 
 ## Architecture Overview
