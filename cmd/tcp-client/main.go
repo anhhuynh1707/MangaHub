@@ -31,6 +31,10 @@ func main() {
 
 	username := os.Args[1]
 	token := os.Args[2]
+	serverAddr := strings.TrimSpace(os.Getenv("MANGAHUB_TCP_ADDR"))
+	if serverAddr == "" {
+		serverAddr = "localhost:9090"
+	}
 
 	// Support reading token from file
 	if strings.HasPrefix(token, "token-file:") {
@@ -43,9 +47,9 @@ func main() {
 		token = strings.TrimSpace(string(data))
 	}
 
-	fmt.Printf("[%s] Connecting to TCP server at localhost:9090...\n", username)
+	fmt.Printf("[%s] Connecting to TCP server at %s...\n", username, serverAddr)
 
-	conn, err := net.DialTimeout("tcp", "localhost:9090", 5*time.Second)
+	conn, err := net.DialTimeout("tcp", serverAddr, 5*time.Second)
 	if err != nil {
 		fmt.Printf("[%s] Failed to connect: %v\n", username, err)
 		os.Exit(1)

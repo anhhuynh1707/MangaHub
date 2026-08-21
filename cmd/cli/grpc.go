@@ -12,8 +12,6 @@ import (
 	pb "mangahub/internal/grpc/pb"
 )
 
-const defaultGRPCAddr = "localhost:9092"
-
 func handleGRPC(args []string) {
 	if len(args) == 0 {
 		fmt.Println("Usage: mangahub grpc <manga|progress|watch>")
@@ -79,7 +77,7 @@ func grpcMangaGet(args []string) {
 
 	cfg := requireAuth()
 
-	client, err := grpcClient.NewMangaClient(defaultGRPCAddr, cfg.Token)
+	client, err := grpcClient.NewMangaClient(grpcServerAddr(), cfg.Token)
 	if err != nil {
 		fmt.Printf("✗ Failed to connect to gRPC server: %v\n", err)
 		fmt.Println("  Make sure the server is running: go run ./cmd/api-server/")
@@ -132,7 +130,7 @@ func grpcMangaSearch(args []string) {
 
 	cfg := requireAuth()
 
-	client, err := grpcClient.NewMangaClient(defaultGRPCAddr, cfg.Token)
+	client, err := grpcClient.NewMangaClient(grpcServerAddr(), cfg.Token)
 	if err != nil {
 		fmt.Printf("✗ Failed to connect to gRPC server: %v\n", err)
 		fmt.Println("  Make sure the server is running: go run ./cmd/api-server/")
@@ -212,7 +210,7 @@ func grpcMangaStream(args []string) {
 	}
 
 	cfg := requireAuth()
-	client, err := grpcClient.NewMangaClient(defaultGRPCAddr, cfg.Token)
+	client, err := grpcClient.NewMangaClient(grpcServerAddr(), cfg.Token)
 	if err != nil {
 		fmt.Printf("✗ Failed to connect to gRPC server: %v\n", err)
 		return
@@ -247,7 +245,7 @@ func grpcWatch(args []string) {
 	mangaID := parseFlag(args, "manga-id")
 
 	cfg := requireAuth()
-	client, err := grpcClient.NewMangaClient(defaultGRPCAddr, cfg.Token)
+	client, err := grpcClient.NewMangaClient(grpcServerAddr(), cfg.Token)
 	if err != nil {
 		fmt.Printf("✗ Failed to connect to gRPC server: %v\n", err)
 		return
@@ -312,7 +310,7 @@ func grpcProgressUpdate(args []string) {
 
 	cfg := requireAuth()
 
-	client, err := grpcClient.NewMangaClient(defaultGRPCAddr, cfg.Token)
+	client, err := grpcClient.NewMangaClient(grpcServerAddr(), cfg.Token)
 	if err != nil {
 		fmt.Printf("✗ Failed to connect to gRPC server: %v\n", err)
 		fmt.Println("  Make sure the server is running: go run ./cmd/api-server/")

@@ -53,7 +53,8 @@ func handleNotify(args []string) {
 
 // notifySubscribe registers for UDP notifications and listens for incoming messages.
 func notifySubscribe() {
-	serverAddr, err := net.ResolveUDPAddr("udp", "localhost:9091")
+	serverName := udpServerAddr()
+	serverAddr, err := net.ResolveUDPAddr("udp", serverName)
 	if err != nil {
 		fmt.Printf("✗ Failed to resolve server address: %v\n", err)
 		return
@@ -86,6 +87,7 @@ func notifySubscribe() {
 
 	fmt.Printf("✓ Subscribed to notifications!\n")
 	fmt.Printf("  %s\n", ack.Message)
+	fmt.Printf("  Server: %s\n", serverName)
 	fmt.Printf("  Listening on: %s\n", conn.LocalAddr())
 	fmt.Println("\nWaiting for notifications... (Press Ctrl+C to exit)")
 	fmt.Println()
@@ -131,7 +133,7 @@ func notifySubscribe() {
 
 // notifyUnsubscribe sends an unregister message to the UDP server.
 func notifyUnsubscribe() {
-	serverAddr, err := net.ResolveUDPAddr("udp", "localhost:9091")
+	serverAddr, err := net.ResolveUDPAddr("udp", udpServerAddr())
 	if err != nil {
 		fmt.Printf("✗ Failed to resolve server address: %v\n", err)
 		return
@@ -161,7 +163,8 @@ func notifyUnsubscribe() {
 
 // notifyTest sends a test message to check if the UDP server is alive.
 func notifyTest() {
-	serverAddr, err := net.ResolveUDPAddr("udp", "localhost:9091")
+	serverName := udpServerAddr()
+	serverAddr, err := net.ResolveUDPAddr("udp", serverName)
 	if err != nil {
 		fmt.Printf("✗ Failed to resolve: %v\n", err)
 		return
@@ -189,7 +192,7 @@ func notifyTest() {
 	json.Unmarshal(buf[:n], &resp)
 	fmt.Println("UDP Notification Test:")
 	fmt.Printf("  Status:  ✓ %s\n", resp.Message)
-	fmt.Printf("  Server:  localhost:9091\n")
+	fmt.Printf("  Server:  %s\n", serverName)
 }
 
 // notifySend triggers a notification broadcast via the HTTP API.

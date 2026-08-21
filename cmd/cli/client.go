@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -52,10 +53,25 @@ func getConfigPath() string {
 	return filepath.Join(configDir, "profiles", getProfileName()+".json")
 }
 
+func configuredAddress(envName, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func apiServerURL() string  { return configuredAddress("MANGAHUB_API_URL", "http://localhost:8080") }
+func tcpServerAddr() string { return configuredAddress("MANGAHUB_TCP_ADDR", "localhost:9090") }
+func udpServerAddr() string { return configuredAddress("MANGAHUB_UDP_ADDR", "localhost:9091") }
+func grpcServerAddr() string {
+	return configuredAddress("MANGAHUB_GRPC_ADDR", "localhost:9092")
+}
+
 // loadConfig reads the stored configuration for the current profile.
-// Priority: MANGAHUB_TOKEN env var > profile config file
+// Environment variables override profile values so one CLI build can target a
+// local stack or the owner-restricted EC2 protocol endpoints.
 func loadConfig() *Config {
-	cfg := &Config{ServerURL: "http://localhost:8080"}
+	cfg := &Config{ServerURL: apiServerURL()}
 
 	// Read from profile config file
 	data, err := os.ReadFile(getConfigPath())
@@ -63,7 +79,10 @@ func loadConfig() *Config {
 		json.Unmarshal(data, cfg)
 	}
 	if cfg.ServerURL == "" {
-		cfg.ServerURL = "http://localhost:8080"
+		cfg.ServerURL = apiServerURL()
+	}
+	if envURL := strings.TrimSpace(os.Getenv("MANGAHUB_API_URL")); envURL != "" {
+		cfg.ServerURL = strings.TrimRight(envURL, "/")
 	}
 
 	// MANGAHUB_TOKEN env var overrides the stored token (per-terminal)

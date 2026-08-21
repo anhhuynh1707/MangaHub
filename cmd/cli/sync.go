@@ -63,10 +63,11 @@ func handleSync(args []string) {
 // Supports: progress <manga-id> <chapter>, ping, status, quit
 func syncConnect() {
 	cfg := requireAuth()
+	serverAddr := tcpServerAddr()
 
-	fmt.Println("Connecting to TCP sync server at localhost:9090...")
+	fmt.Printf("Connecting to TCP sync server at %s...\n", serverAddr)
 
-	conn, err := net.DialTimeout("tcp", "localhost:9090", 5*time.Second)
+	conn, err := net.DialTimeout("tcp", serverAddr, 5*time.Second)
 	if err != nil {
 		fmt.Printf("✗ Connection failed: %v\n", err)
 		fmt.Println("  Check server status: mangahub server status")
@@ -98,7 +99,7 @@ func syncConnect() {
 
 	fmt.Printf("✓ Connected successfully!\n\n")
 	fmt.Println("Connection Details:")
-	fmt.Printf("  Server:    localhost:9090\n")
+	fmt.Printf("  Server:    %s\n", serverAddr)
 	fmt.Printf("  User:      %s (%s)\n", cfg.Username, cfg.UserID)
 	fmt.Printf("  Profile:   %s\n", getProfileName())
 	fmt.Printf("  Connected: %s\n", connectedAt.Format("2006-01-02 15:04:05"))
@@ -210,18 +211,19 @@ func syncStatus() {
 	resp, err := apiRequest("GET", "/sync/status", nil, cfg.Token)
 	if err != nil {
 		// Fallback: try direct TCP connection check
-		conn, tcpErr := net.DialTimeout("tcp", "localhost:9090", 2*time.Second)
+		serverAddr := tcpServerAddr()
+		conn, tcpErr := net.DialTimeout("tcp", serverAddr, 2*time.Second)
 		if tcpErr != nil {
 			fmt.Println("TCP Sync Status:")
 			fmt.Println("  Connection: ✗ Server unreachable")
-			fmt.Println("  Server:     localhost:9090")
+			fmt.Printf("  Server:     %s\n", serverAddr)
 			fmt.Printf("  Error:      %v\n", err)
 			return
 		}
 		conn.Close()
 		fmt.Println("TCP Sync Status:")
 		fmt.Println("  Connection: ✓ Server available (API unreachable)")
-		fmt.Println("  Server:     localhost:9090")
+		fmt.Printf("  Server:     %s\n", serverAddr)
 		return
 	}
 
@@ -264,10 +266,11 @@ func syncStatus() {
 // syncMonitor connects to the TCP server in read-only mode to watch live updates.
 func syncMonitor() {
 	cfg := requireAuth()
+	serverAddr := tcpServerAddr()
 
-	fmt.Println("Connecting to monitor sync updates...")
+	fmt.Printf("Connecting to monitor sync updates at %s...\n", serverAddr)
 
-	conn, err := net.DialTimeout("tcp", "localhost:9090", 5*time.Second)
+	conn, err := net.DialTimeout("tcp", serverAddr, 5*time.Second)
 	if err != nil {
 		fmt.Printf("✗ Connection failed: %v\n", err)
 		return
@@ -465,9 +468,10 @@ func syncStrategy(args []string) {
 // tcpQuickConnect opens a TCP connection, reads the welcome, authenticates,
 // and returns the connection + scanner ready for one request/response.
 func tcpQuickConnect(token string) (net.Conn, *bufio.Scanner, error) {
-	conn, err := net.DialTimeout("tcp", "localhost:9090", 5*time.Second)
+	serverAddr := tcpServerAddr()
+	conn, err := net.DialTimeout("tcp", serverAddr, 5*time.Second)
 	if err != nil {
-		return nil, nil, fmt.Errorf("TCP server unreachable at localhost:9090: %w", err)
+		return nil, nil, fmt.Errorf("TCP server unreachable at %s: %w", serverAddr, err)
 	}
 
 	scanner := bufio.NewScanner(conn)
@@ -491,7 +495,6 @@ func tcpQuickConnect(token string) (net.Conn, *bufio.Scanner, error) {
 
 	return conn, scanner, nil
 }
-
 
 func handleServer(args []string) {
 	if len(args) == 0 {
