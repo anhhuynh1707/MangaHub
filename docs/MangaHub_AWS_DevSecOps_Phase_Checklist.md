@@ -119,7 +119,7 @@ Axios
 ## Backend
 
 ```text
-Go 1.25
+Go 1.26
 Gin
 SQLite + WAL
 Redis
@@ -834,6 +834,16 @@ Low      -> report
 
 Do not blindly fail on every scanner finding.
 
+Implemented policy:
+
+- [x] `govulncheck` blocks reachable Go vulnerabilities.
+- [x] `npm audit --audit-level=high` blocks high and critical advisories.
+- [x] Trivy blocks high and critical dependency, configuration, secret, and
+  fixable production-image findings.
+- [x] Unfixed operating-system findings are reviewed but do not block. They
+  cannot be remediated by an application dependency bump; base images remain
+  minimal, supported, and updated through Dependabot.
+
 ## 14.2 Secret scanning
 
 Detect:
@@ -848,6 +858,11 @@ passwords
 ```
 
 No secrets may be committed.
+
+- [x] Gitleaks scans the complete Git history.
+- [x] Historical expired local Postman JWT fixtures are removed from the current
+  collection and narrowly allowlisted by exact commit plus exact file path.
+- [x] New JWTs in the collection or any other path still fail the gate.
 
 ## 14.3 Container scanning
 
@@ -867,6 +882,10 @@ Publish
 
 Do not publish production images before required security gates pass.
 
+- [x] Backend and frontend images build before scanning.
+- [x] Trivy scans OS and language packages.
+- [x] Publishing depends on every required security job.
+
 ## 14.4 Static analysis
 
 Keep:
@@ -876,6 +895,21 @@ go vet
 ```
 
 Add further analyzers only where useful.
+
+- [x] `go vet` remains required.
+- [x] Workflow actions are immutable-SHA pinned and validated with Actionlint.
+- [x] Dependabot monitors Go, npm, Docker, and GitHub Actions dependencies.
+
+Phase 9 evidence (2026-08-21):
+
+- `govulncheck ./...`: no reachable vulnerabilities.
+- `npm audit`: zero vulnerabilities.
+- Gitleaks `v8.30.1`: 70 commits scanned, no leaks found.
+- Trivy `v0.72.0`: repository, backend image, and frontend image passed the
+  blocking high/critical policy; the scan also drove the Go dependency upgrades
+  and the move to digest-pinned, unprivileged Nginx on Alpine 3.24.
+- Backend, frontend, edge, Compose, Playwright, TCP, UDP, and gRPC checks were
+  rerun after remediation.
 
 ---
 
@@ -909,16 +943,20 @@ Desired pipeline:
 
 Checklist:
 
-- [ ] Preserve backend tests.
-- [ ] Preserve frontend build.
-- [ ] Preserve Playwright.
-- [ ] Preserve Docker smoke test.
-- [ ] Preserve GHCR publishing.
-- [ ] Add security jobs.
-- [ ] PRs do not deploy production.
-- [ ] Production publishing occurs only on intended production branch.
-- [ ] Use immutable SHA tags.
-- [ ] Keep `latest` only as a convenience tag if desired.
+- [x] Preserve backend tests.
+- [x] Preserve frontend build.
+- [x] Preserve Playwright.
+- [x] Preserve Docker smoke test.
+- [x] Preserve GHCR publishing.
+- [x] Add security jobs.
+- [x] PRs do not deploy production.
+- [x] Production publishing occurs only on intended production branch.
+- [x] Use immutable SHA tags.
+- [x] Keep `latest` only as a convenience tag if desired.
+
+Phase 10 implementation is locally validated with Actionlint. The first remote
+branch run remains a gate after these changes are pushed; AWS deployment is not
+triggered from feature branches or pull requests.
 
 ---
 
@@ -1757,17 +1795,17 @@ Only claim technologies that are actually implemented.
 
 | Phase | Area | Status |
 |---|---|---|
-| 0 | Baseline verification | ⬜ |
+| 0 | Baseline verification | ✅ |
 | 1 | DevSecOps branch | 🟨 Branch complete; CI gate pending PR |
 | 2 | Repository structure | ✅ |
-| 3 | Production Docker | ⬜ |
-| 4 | Production frontend | ⬜ |
-| 5 | Production backend | ⬜ |
-| 6 | Docker networking | ⬜ |
-| 7 | Nginx | ⬜ |
-| 8 | Local production test | ⬜ |
-| 9 | Security scanning | ⬜ |
-| 10 | CI refactor | ⬜ |
+| 3 | Production Docker | ✅ |
+| 4 | Production frontend | ✅ |
+| 5 | Production backend | ✅ |
+| 6 | Docker networking | ✅ |
+| 7 | Nginx | ✅ |
+| 8 | Local production test | ✅ |
+| 9 | Security scanning | ✅ Local gates passed |
+| 10 | CI refactor | 🟨 Implemented locally; remote run pending push |
 | 11 | AWS account | ⬜ |
 | 12 | AWS VPC | ⬜ |
 | 13 | Security Group | ⬜ |

@@ -30,11 +30,13 @@ This is an accepted project decision, not a second branch to create.
 | Checklist area | State | Evidence |
 |---|---|---|
 | Phase 0: baseline | Historical baseline exists; full gate will be rerun before production changes | Existing CI and local Compose |
-| Phase 1: branch | Branch complete; CI gate pending PR | `features/devsecops` tracks `origin/features/devsecops`; the current workflow does not run on a feature-branch push |
+| Phase 1: branch | Branch complete; remote CI rerun pending push | `features/devsecops` tracks `origin/features/devsecops`; CI now includes this branch |
 | Phase 2: structure | Complete | `deploy/`, `infra/aws/`, this record, and security policy |
 | Phases 3-7: production runtime | Locally verified; immutable release tags remain for CI/CD | Separate Compose/overrides, same-origin `/api`, hardened backend image, private networks, edge Nginx |
 | Phase 8: local production test | Complete | Production-edge Playwright journey, HTTP health/security, raw TCP/UDP/gRPC, restart persistence, container hardening, and logs passed on 2026-08-21 |
-| Phase 9 onward | Not implemented yet | Must not be presented as complete |
+| Phase 9: security scanning | Implemented and locally verified | Govulncheck, npm audit, Gitleaks history, Trivy repository/image scans, pinned actions, and Dependabot |
+| Phase 10: CI refactor | Implemented locally; remote run pending | Existing tests/builds remain and GHCR publish requires security, Docker, and E2E gates |
+| Phase 11 onward | Not implemented yet | Must not be presented as complete |
 
 ## Delivery gates
 

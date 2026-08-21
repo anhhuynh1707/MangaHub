@@ -80,6 +80,27 @@ for routine work.
 - Redis is treated as rebuildable cache data. SQLite is persistent application
   data and is never deleted by deployment or rollback.
 
+## Automated scanning policy
+
+Every pull request and selected branch push runs the same reusable security
+workflow. Reachable Go vulnerabilities, high/critical npm advisories, secret
+findings, repository misconfigurations, and fixable high/critical production
+image findings block publication. GitHub Actions are pinned to full commit SHAs,
+and Dependabot monitors actions, Go, npm, and Docker dependencies weekly.
+
+Base distributions sometimes publish high/critical records before a package fix
+exists. Image scans report and review those records, but the blocking image gate
+uses Trivy's `ignore-unfixed` policy. This is not a permanent exception for a
+fixable issue: supported minimal bases are refreshed, any available fixed version
+must be adopted, and the accepted residual risk is limited to this disposable
+portfolio environment. `govulncheck` separately verifies whether Go application
+code reaches a known vulnerable symbol.
+
+Gitleaks scans complete history. Its only allowlist is rule-specific and requires
+both an exact historical commit and the exact Postman collection path for expired
+local fixture JWTs that have been removed from the current collection. It does
+not permit a new token anywhere in the repository.
+
 ## Deployment, backup, and logging policy
 
 - Deploy immutable SHA-tagged images; record commit, image tag/digest, and time.
