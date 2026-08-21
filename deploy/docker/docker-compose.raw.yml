@@ -1,12 +1,25 @@
 services:
   mangahub-tcp:
+    networks:
+      - backend
+      - raw-ingress
     ports:
       - "${RAW_BIND_ADDRESS:-127.0.0.1}:9090:9090/tcp"
 
   mangahub-udp:
+    networks:
+      - backend
+      - raw-ingress
     ports:
       - "${RAW_BIND_ADDRESS:-127.0.0.1}:9091:9091/udp"
 
   mangahub-grpc:
+    networks:
+      - backend
+      - raw-ingress
     ports:
       - "${RAW_BIND_ADDRESS:-127.0.0.1}:9092:9092/tcp"
+
+networks:
+  raw-ingress:
+    driver: bridge

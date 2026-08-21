@@ -559,19 +559,22 @@ deploy/docker/docker-compose.prod.yml
 
 Production Compose requirements:
 
-- [ ] restart policies
-- [ ] internal Docker networking
-- [ ] no unnecessary public ports
-- [ ] environment variables
-- [ ] no secrets in source
-- [ ] persistent SQLite data
-- [ ] health checks
-- [ ] production frontend build
-- [ ] production Go runtime
-- [ ] Nginx
+- [x] restart policies
+- [x] internal Docker networking
+- [x] no unnecessary public ports
+- [x] environment variables
+- [x] no secrets in source
+- [x] persistent SQLite data
+- [x] health checks
+- [x] production frontend build
+- [x] production Go runtime
+- [x] Nginx
 - [ ] deterministic image tags
-- [ ] safe restart
-- [ ] no development-only commands
+- [x] safe restart
+- [x] no development-only commands
+
+Immutable `sha-<commit>` release tags remain deliberately open until the image
+publishing/CD phases. The local production runtime does not use `latest`.
 
 ---
 
@@ -597,17 +600,17 @@ Nginx
 
 Checklist:
 
-- [ ] Inspect `frontend/Dockerfile`.
-- [ ] Verify production build.
-- [ ] Verify Node version.
-- [ ] Use `npm ci`.
-- [ ] Use `npm run build`.
-- [ ] Serve `dist/` with Nginx.
-- [ ] Remove Vite dev server from production runtime.
-- [ ] Verify SPA fallback.
-- [ ] Verify API URL.
-- [ ] Verify WebSocket URL.
-- [ ] Verify SSE URL.
+- [x] Inspect `frontend/Dockerfile`.
+- [x] Verify production build.
+- [x] Verify Node version.
+- [x] Use `npm ci`.
+- [x] Use `npm run build`.
+- [x] Serve `dist/` with Nginx.
+- [x] Remove Vite dev server from production runtime.
+- [x] Verify SPA fallback.
+- [x] Verify API URL.
+- [x] Verify WebSocket URL.
+- [x] Verify SSE URL.
 
 ## Gate
 
@@ -629,17 +632,17 @@ Inspect the current root `Dockerfile`.
 
 Checklist:
 
-- [ ] Use multi-stage build where useful.
-- [ ] Build Go binaries in builder stage.
-- [ ] Use minimal runtime image.
-- [ ] Do not embed secrets.
-- [ ] Use non-root runtime where compatible with SQLite permissions.
-- [ ] Preserve `/app/data`.
-- [ ] Verify API server.
-- [ ] Verify TCP server.
-- [ ] Verify UDP server.
-- [ ] Verify gRPC server.
-- [ ] Verify health endpoint.
+- [x] Use multi-stage build where useful.
+- [x] Build Go binaries in builder stage.
+- [x] Use minimal runtime image.
+- [x] Do not embed secrets.
+- [x] Use non-root runtime where compatible with SQLite permissions.
+- [x] Preserve `/app/data`.
+- [x] Verify API server.
+- [x] Verify TCP server.
+- [x] Verify UDP server.
+- [x] Verify gRPC server.
+- [x] Verify health endpoint.
 
 Gate:
 
@@ -674,14 +677,18 @@ Desired conceptual architecture:
 
 Rules:
 
-- [ ] Redis internal only.
-- [ ] SQLite internal.
-- [ ] Only required public ports published.
-- [ ] gRPC not public unless required.
-- [ ] TCP not public unless required.
-- [ ] UDP not public unless required.
-- [ ] Nginx is the public HTTP/HTTPS entry point.
-- [ ] Internal services use Docker DNS/service names.
+- [x] Redis internal only.
+- [x] SQLite internal.
+- [x] Only required public ports published.
+- [x] gRPC not public unless required.
+- [x] TCP not public unless required.
+- [x] UDP not public unless required.
+- [x] Nginx is the public HTTP/HTTPS entry point.
+- [x] Internal services use Docker DNS/service names.
+
+Raw protocols are an explicit owner-demo requirement. They remain unpublished
+in the base Compose file; the opt-in override binds them to loopback locally and
+will rely on owner IPv4 `/32` Security Group rules on EC2.
 
 ---
 
@@ -707,15 +714,15 @@ Nginx
 
 Checklist:
 
-- [ ] Configure Nginx.
-- [ ] Configure SPA fallback.
-- [ ] Configure API proxy.
-- [ ] Configure WebSocket upgrade.
-- [ ] Configure SSE correctly.
-- [ ] Set suitable proxy timeouts.
-- [ ] Add basic security headers.
-- [ ] Hide internal service ports.
-- [ ] Test locally.
+- [x] Configure Nginx.
+- [x] Configure SPA fallback.
+- [x] Configure API proxy.
+- [x] Configure WebSocket upgrade.
+- [x] Configure SSE correctly.
+- [x] Set suitable proxy timeouts.
+- [x] Add basic security headers.
+- [x] Hide internal service ports.
+- [x] Test locally.
 
 Codex must inspect the actual route structure before modifying proxy paths.
 
@@ -751,19 +758,38 @@ Health
 
 Checklist:
 
-- [ ] Frontend loads.
-- [ ] API works.
-- [ ] Login works.
-- [ ] JWT works.
-- [ ] SQLite persists.
-- [ ] Redis works.
-- [ ] WebSocket works.
-- [ ] SSE works.
-- [ ] Required TCP works.
-- [ ] Required UDP works.
-- [ ] Required gRPC works.
-- [ ] Container restart preserves data.
-- [ ] Logs are understandable.
+- [x] Frontend loads.
+- [x] API works.
+- [x] Login works.
+- [x] JWT works.
+- [x] SQLite persists.
+- [x] Redis works.
+- [x] WebSocket works.
+- [x] SSE works.
+- [x] Required TCP works.
+- [x] Required UDP works.
+- [x] Required gRPC works.
+- [x] Container restart preserves data.
+- [x] Logs are understandable.
+
+Phase 8 evidence (2026-08-21):
+
+- Built the backend and frontend production images and started the complete
+  Compose stack through the edge on `http://localhost:8088`.
+- All long-running containers reached running/healthy state. Only the edge was
+  web-accessible; Redis, API, and frontend ports stayed inside Docker.
+- `GET /health` returned `200` with security headers. Public requests for
+  `/api/health/db` and `/api/swagger/index.html` returned `404`.
+- Playwright's production-edge journey passed registration, login, browsing,
+  library, progress, review, chat/WebSocket, and SSE (`1 passed`).
+- Authenticated TCP strategy lookup, UDP echo, and authenticated gRPC search
+  passed through loopback-only ports `9090`, `9091/udp`, and `9092`.
+- A full service restart preserved the disposable account and SQLite manga
+  data; Redis reloaded its snapshot and all health checks recovered.
+- Backend containers were verified as UID/GID `10001:10001`, read-only root
+  filesystems, all Linux capabilities dropped, and `no-new-privileges` enabled.
+- A shutdown defect discovered in the UDP logs was fixed and covered by a race
+  test; restart logs are now concise and graceful.
 
 ## Gate
 

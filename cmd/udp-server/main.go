@@ -20,16 +20,18 @@ func main() {
 	// Graceful shutdown on Ctrl+C
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	shutdownComplete := make(chan struct{})
 
 	go func() {
 		<-sigChan
 		log.Println("Shutting down UDP server...")
 		server.Stop()
-		os.Exit(0)
+		close(shutdownComplete)
 	}()
 
 	log.Printf("Starting standalone UDP Notification Server on :%s", port)
 	if err := server.Start(); err != nil {
 		log.Fatalf("UDP server error: %v", err)
 	}
+	<-shutdownComplete
 }

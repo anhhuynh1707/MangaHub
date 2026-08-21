@@ -48,7 +48,9 @@ deploy/
 The base production file never publishes raw service ports. Add
 `docker-compose.raw.yml` only for a deliberate protocol demonstration. It binds
 to `127.0.0.1` by default; EC2 may use `0.0.0.0` only together with owner-IP
-`/32` AWS Security Group rules.
+`/32` AWS Security Group rules. The override adds a dedicated ingress bridge so
+Docker can publish those ports while the services keep their private backend
+network for API-to-service traffic.
 
 ## Local production-style test
 

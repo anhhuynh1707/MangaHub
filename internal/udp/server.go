@@ -2,6 +2,7 @@ package udp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -54,7 +55,16 @@ func (s *NotificationServer) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to start UDP server: %w", err)
 	}
+	s.mu.Lock()
 	s.conn = conn
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		if s.conn == conn {
+			s.conn = nil
+		}
+		s.mu.Unlock()
+	}()
 
 	log.Printf("📢 UDP Notification Server listening on :%s", s.Port)
 
@@ -63,6 +73,9 @@ func (s *NotificationServer) Start() error {
 	for {
 		n, clientAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return nil
+			}
 			log.Printf("UDP read error: %v", err)
 			continue
 		}
@@ -73,8 +86,11 @@ func (s *NotificationServer) Start() error {
 
 // Stop gracefully shuts down the UDP server.
 func (s *NotificationServer) Stop() {
-	if s.conn != nil {
-		s.conn.Close()
+	s.mu.RLock()
+	conn := s.conn
+	s.mu.RUnlock()
+	if conn != nil {
+		_ = conn.Close()
 	}
 	log.Println("UDP notification server stopped")
 }
@@ -125,7 +141,9 @@ func (s *NotificationServer) handleMessage(data []byte, clientAddr *net.UDPAddr)
 		}
 		data, _ := json.Marshal(statusResp)
 		data = append(data, '\n')
-		s.conn.WriteToUDP(data, clientAddr)
+		if conn := s.connection(); conn != nil {
+			_, _ = conn.WriteToUDP(data, clientAddr)
+		}
 		return
 	}
 
@@ -242,7 +260,17 @@ func (s *NotificationServer) sendTo(addr *net.UDPAddr, notif Notification) {
 	}
 	data = append(data, '\n')
 
-	if _, err := s.conn.WriteToUDP(data, addr); err != nil {
+	conn := s.connection()
+	if conn == nil {
+		return
+	}
+	if _, err := conn.WriteToUDP(data, addr); err != nil && !errors.Is(err, net.ErrClosed) {
 		log.Printf("UDP: Failed to send to %s: %v", addr, err)
 	}
+}
+
+func (s *NotificationServer) connection() *net.UDPConn {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.conn
 }
