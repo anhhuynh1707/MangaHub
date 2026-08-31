@@ -1617,6 +1617,40 @@ Both manifests must exist and include `linux/amd64` before that release is used
 on the planned x86_64 EC2 instance. Do not run the backend image alone as the
 production proof; the release contract is the complete Compose topology.
 
+### S17.4 Diagnose an Image-Scan Failure
+
+Do not bypass a newly failing Trivy gate with `exit-code: 0`, a severity
+exclusion, or an ignore entry merely because the previous run was green.
+
+1. Open **Security gates → Production image scan** and identify the failed
+   backend, frontend, edge, or Redis step.
+2. Reproduce with the same Trivy version, scanners, severity policy, and
+   `ignore-unfixed` setting used by `.github/workflows/security.yml`.
+3. Record the package, installed version, CVE, severity, status, and fixed
+   version.
+4. Replace or update the narrowest owning dependency. For a base-image package,
+   resolve an official rebuilt image and pin its immutable digest.
+5. Scan the replacement's `linux/amd64` manifest before editing the pin.
+6. Update every runtime and explicit scan reference to the same digest, then
+   rerun CI.
+
+Remediation record from 2026-08-31:
+
+| Item | Finding / resolution |
+|---|---|
+| Failed artifact | Frontend runtime image and the shared unprivileged Nginx edge base |
+| Finding | `CVE-2026-14456`, HIGH, OpenSSL QUIC denial of service through unbounded memory growth |
+| Vulnerable packages | `libcrypto3` and `libssl3` `3.5.7-r0` |
+| Fixed packages | `3.5.8-r0` |
+| Old image digest | `sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49` |
+| Replacement index | `sha256:45ce1e2e699234253d1def7baa96218a5d00b498d1ba0cbb1a17b6bdf73d1351` |
+| Replacement amd64 manifest | `sha256:ee055adf39a3cc6c2b8fc5734342d42728fa5fcaa5e8798fd24e4117ac969b2a` |
+| Replacement scan | Trivy 0.72.0: 0 HIGH/CRITICAL vulnerabilities; secret scanner enabled |
+
+The tag remains human-readable, but the digest is the actual supply-chain pin.
+The same replacement digest must appear in `frontend/Dockerfile`, production
+Compose, and the explicit pinned-edge scan step.
+
 ---
 
 ## S18. UDP Delivery Confirmation (ACK System)
