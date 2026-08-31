@@ -1,5 +1,124 @@
 # MangaHub — Detailed Code Flow Documentation
 
+> **Last updated:** 2026-08-31
+> **Scope:** application internals, local Docker, and the prepared AWS/EC2
+> delivery path on `features/devsecops`
+> **AWS status:** repository, CI, immutable images, and local production runtime
+> are verified; AWS resources have not been created yet.
+
+---
+
+## 0. Start Here — Understand the Whole System First
+
+The rest of this document is a detailed feature-by-feature reference. Read this
+section first to understand how the pieces fit together; then jump to the
+feature section you are changing or debugging.
+
+### 0.1 System in one diagram
+
+```text
+Developer
+  │ push features/devsecops
+  ▼
+GitHub Actions ── tests + E2E + security + Compose/script gates
+  │ all required gates pass
+  ▼
+GHCR ── backend and frontend images tagged sha-<full-40-character-commit>
+  │ manual pull/deploy (AWS execution is still pending)
+  ▼
+EC2 / local production-style host
+  │
+  ├─ edge Nginx :80 on EC2 (:8088 locally)
+  │    ├─ /              ──► React frontend Nginx
+  │    ├─ /api/*         ──► Go REST API (prefix stripped)
+  │    ├─ /api/ws/*      ──► Go WebSocket handler
+  │    ├─ /api/events/*  ──► Go SSE handler
+  │    └─ /health        ──► minimal API readiness only
+  │
+  ├─ Go API ──► Redis cache
+  │     │
+  │     ├─► SQLite WAL volume ◄── TCP sync service
+  │     │                    ◄── gRPC service
+  │     └─► UDP notification service (stateless; no DB mount)
+  │
+  └─ optional owner-only raw listeners
+       ├─ TCP 9090
+       ├─ UDP 9091
+       └─ gRPC/TCP 9092
+```
+
+There are two deployment shapes:
+
+| Shape | Entry file | Intended use | Host exposure |
+|---|---|---|---|
+| Development | `docker-compose.yml` | Fast local development and direct protocol learning | Frontend 3000, API 8080, Redis 6379, TCP 9090, UDP 9091, gRPC 9092 |
+| Production-style | `deploy/docker/docker-compose.prod.yml` plus optional overrides | Local release proof and the later EC2 demo | Edge HTTP only by default; raw ports require an explicit override |
+
+The production shape is the security boundary used by the AWS runbook. The
+root Compose file is intentionally easier to inspect and is not the EC2
+deployment definition.
+
+### 0.2 Runtime responsibilities
+
+| Component | Main files | Responsibility | State |
+|---|---|---|---|
+| React SPA | `frontend/src/` | Pages, API calls, client state, chat, SSE notifications | Stateless browser client |
+| Edge proxy | `deploy/nginx/nginx.conf` | One public origin, route separation, security headers, WebSocket/SSE proxy behavior | No application data |
+| API server | `cmd/api-server/` | Dependency wiring, REST, auth, WebSocket, SSE, proxy calls to raw services | Uses SQLite and Redis |
+| Domain packages | `internal/*/handler.go`, `service.go`, `repository.go` | HTTP validation, business rules, persistence | SQLite through repositories |
+| Redis | `pkg/cache/redis.go` | Cache acceleration; API degrades gracefully if unavailable | Rebuildable cache |
+| SQLite | `pkg/database/`, `internal/dbops/` | Durable demo data, WAL concurrency, verified backup/restore | Persistent Docker volume |
+| TCP sync | `internal/tcp/`, `cmd/tcp-server/` | Progress synchronization and conflict strategies | Shares SQLite |
+| UDP notify | `internal/udp/`, `cmd/udp-server/` | Registration, broadcasts, and optional ACK tracking | Stateless; no volume |
+| gRPC | `internal/grpc/`, `cmd/grpc-server/`, `proto/` | Unary and streaming RPC demonstrations | Shares SQLite |
+| CLI | `cmd/cli/` | Exercises HTTP, WebSocket, TCP, UDP, and gRPC outside the browser | Local profile/token files |
+| Release operations | `deploy/scripts/` | Configure, deploy, health-gate, rollback, backup, restore, and monitoring | Root-protected server state |
+
+### 0.3 One browser request from start to finish
+
+For a production request such as `GET /api/manga?q=one`:
+
+1. The browser uses the relative frontend base URL `/api`.
+2. Edge Nginx receives the request, strips `/api`, and proxies
+   `/manga?q=one` to `mangahub-api:8080` on the private frontend network.
+3. Gin runs recovery, request logging, CORS, and rate limiting.
+4. The manga handler parses the request and calls the manga service.
+5. The service applies business rules and checks Redis where applicable.
+6. The repository executes parameterized SQLite queries when the cache cannot
+   answer the request.
+7. The response returns through Nginx with the public security headers.
+
+Authenticated requests add JWT validation before the handler. Browser chat
+upgrades HTTP to WebSocket, while browser live activity stays on HTTP through
+SSE. Raw TCP, UDP, and gRPC are retained for the CLI demonstration; HTTPS for a
+future domain would not remove those protocols.
+
+### 0.4 Storage and failure model
+
+- SQLite is the source of truth for this single-instance demo. API, TCP, and
+  gRPC share `mangahub-data`; UDP does not mount it.
+- Redis is disposable. Losing Redis can reduce performance, but must not remove
+  durable user data.
+- A normal deploy or rollback recreates containers without deleting volumes.
+- `backup.sh` uses SQLite's online backup path, verifies integrity and a
+  checksum, and stores backups in a separate Docker volume.
+- `restore.sh` verifies the selected backup, creates a pre-restore recovery
+  point, stops database users, restores atomically, and requires health to pass.
+- This remains a one-host portfolio lab, not a highly available production
+  platform. Both Docker volumes are still on the EC2 instance's EBS device.
+
+### 0.5 Where to read next
+
+| Question | Read |
+|---|---|
+| How does an application feature execute? | Sections 1–9 and 12–21 below |
+| How do health and containers work? | Sections 10–11 below |
+| How should I test each layer? | [`TESTING.md`](TESTING.md) |
+| What was added for DevSecOps/AWS? | Section 22 below and [`DEVSECOPS.md`](DEVSECOPS.md) |
+| What do I click in AWS? | [`AWS_DEPLOYMENT.md`](AWS_DEPLOYMENT.md) |
+| What is verified versus only planned? | [`AWS_ARCHITECTURE.md`](AWS_ARCHITECTURE.md) and [`AWS_EVIDENCE.md`](AWS_EVIDENCE.md) |
+| How do rollback, backup, and monitoring work? | [`ROLLBACK.md`](ROLLBACK.md), [`BACKUP.md`](BACKUP.md), and [`MONITORING.md`](MONITORING.md) |
+
 ---
 
 ## 1. HTTP REST API (15 pts)
@@ -300,7 +419,7 @@ PUT /users/progress  {"manga_id":"one-piece","current_chapter":50}
   │
   ├─ AuthMiddleware
   ▼
-Inline handler in main.go (line 450)
+`APIServer.UpdateProgress` (`cmd/api-server/sync.go`)
   │ userHandler.UpdateProgress(c)               // handler.go:127
   │   └─ userService.UpdateProgress(userID, &req)
   │        └─ repo.GetLibraryEntry()            // Verify manga in library
@@ -318,22 +437,32 @@ Response: 200 + TCP broadcast to all sync clients
 
 ---
 
-### 1.6 Complete Route Table
+### 1.6 Representative Route Table
 
-#### Public Routes (No Auth)
+The executable source of truth for every route is
+`cmd/api-server/routes.go`. These representative routes show the main grouping
+pattern without duplicating the generated OpenAPI inventory.
+
+#### Public Router Routes (No Auth Middleware)
 
 | Method | Path | Handler | File |
 |--------|------|---------|------|
 | `POST` | `/auth/register` | `userHandler.Register` | `user/handler.go:23` |
 | `POST` | `/auth/login` | `userHandler.Login` | `user/handler.go:45` |
 | `GET` | `/manga` | `mangaHandler.Search` | `manga/handler.go:22` |
+| `POST` | `/manga/search` | `mangaHandler.AdvancedSearch` | `internal/manga/handler.go` |
 | `GET` | `/manga/:id` | `mangaHandler.GetByID` | `manga/handler.go:45` |
 | `GET` | `/manga/:id/reviews` | `reviewHandler.GetReviews` | `review/handler.go:70` |
 | `GET` | `/manga/:id/rating-stats` | `reviewHandler.GetRatingStats` | `review/handler.go:210` |
 | `GET` | `/reading-lists/public` | `sharedListHandler.GetPublicLists` | `sharedlist/handler.go:148` |
 | `GET` | `/reading-lists/:list_id` | `sharedListHandler.GetList` | `sharedlist/handler.go:197` |
-| `GET` | `/health` | inline | `main.go:336` |
-| `GET` | `/ws/chat` | `wsPkg.HandleWebSocket` | `websocket/client.go:26` |
+| `GET` | `/health` | `s.Health` | `cmd/api-server/health.go` |
+| `GET` | `/ws/chat` | `s.ChatWebSocket` (query-token validation downstream) | `cmd/api-server/chat.go` |
+| `GET` | `/events/stream` | `s.EventStream` (validates query token) | `cmd/api-server/events.go` |
+
+“No auth middleware” does not always mean anonymous: browser WebSocket and
+EventSource APIs cannot attach the normal `Authorization` header in this design,
+so their handlers validate a JWT query parameter themselves.
 
 #### Authenticated Routes (JWT Required)
 
@@ -349,7 +478,7 @@ Response: 200 + TCP broadcast to all sync clients
 | `POST` | `/users/library` | `userHandler.AddToLibrary` |
 | `GET` | `/users/library` | `userHandler.GetLibrary` |
 | `DELETE` | `/users/library/:manga_id` | `userHandler.RemoveFromLibrary` |
-| `PUT` | `/users/progress` | inline + `userHandler.UpdateProgress` |
+| `PUT` | `/users/progress` | `s.UpdateProgress` + `userHandler.UpdateProgress` |
 | `POST` | `/manga/:id/reviews` | `reviewHandler.CreateReview` |
 | `GET/PUT/DELETE` | `/reviews/:review_id` | `reviewHandler.Get/Update/Delete` |
 | `POST` | `/reviews/:review_id/helpful` | `reviewHandler.MarkHelpful` |
@@ -366,10 +495,10 @@ Response: 200 + TCP broadcast to all sync clients
 | `POST` | `/reading-lists/:id/manga` | `sharedListHandler.AddMangaToList` |
 | `POST/GET` | `/feed/activities` | `Post/GetActivityFeed` |
 | `GET` | `/feed/timeline` | `activityHandler.GetTimelineView` |
-| `POST` | `/notify/broadcast` | inline (main.go:591) |
-| `GET` | `/sync/status` | inline (main.go:490) |
-| `GET` | `/cache/stats` | inline (main.go:402) |
-| `DELETE` | `/cache/flush` | inline (main.go:407) |
+| `POST` | `/notify/broadcast` | `s.NotifyBroadcast` (`cmd/api-server/notify.go`) |
+| `GET` | `/sync/status` | `s.SyncStatus` (`cmd/api-server/sync.go`) |
+| `GET` | `/cache/stats` | `s.CacheStats` (`cmd/api-server/health.go`) |
+| `DELETE` | `/cache/flush` | `s.CacheFlush` (`cmd/api-server/health.go`) |
 
 ---
 
@@ -3294,15 +3423,25 @@ Each handler calls `activityService.Log*()` at the appropriate point in its busi
 
 ### 10.1 Architecture
 
-Unlike business features which are organized into `internal/` packages with handler/service/repository layers, the health checks are implemented directly in the API server's entrypoint (`cmd/api-server/main.go`). This is because the health checks need direct access to the underlying infrastructure clients (DB pool, Redis pool, internal server instances) that are instantiated during startup.
+Unlike business features, health checks are methods on `*APIServer` in
+`cmd/api-server/health.go`. They need direct access to the database, cache, and
+real-time server fields assembled during bootstrap.
 
-**File:** `cmd/api-server/main.go`
+Health has two deliberately different views:
+
+| View | Routes | Audience | Information returned |
+|---|---|---|---|
+| Minimal readiness | `GET /health` | Public edge, Docker, deployment gate | Only whether the API database dependency is ready |
+| Detailed diagnostics | `GET /health/db`, `/cache`, `/tcp`, `/udp`, `/ws`, `/grpc` | Private API network or direct local development | Component status, latency, counts, and modes |
+
+This separation prevents production users from receiving database counts,
+connected-user details, or internal service information.
 
 ---
 
 ### 10.2 Diagnostic Helpers
 
-The server defines 6 closure functions to diagnose each infrastructure component:
+The server defines six methods to diagnose each infrastructure component:
 
 1. **`checkDatabase()`**:
    - Executes `db.Ping()`
@@ -3313,59 +3452,41 @@ The server defines 6 closure functions to diagnose each infrastructure component
    - Checks `redisCache.IsAvailable()`
    - Returns full Redis stats (hits, misses, keys) if enabled, else `{status: "disabled"}`
 3. **`checkTCP()`**:
-   - If internal `server.TCPServer` is running, queries `GetConnectedUsers()` and `GetUptime()`
+   - If an in-process TCP server is running, queries `GetConnectedUsers()` and `GetUptime()`
+   - In the production multi-container shape, reports `disabled` with mode `external`
    - Also exposes the current conflict resolution `strategy`
 4. **`checkUDP()`**:
-   - If internal `server.UDPServer` is running, queries `GetClientCount()`
+   - If an in-process UDP server is running, queries `GetClientCount()`
+   - In the production multi-container shape, reports `disabled` with mode `external`
 5. **`checkWebSocket()`**:
    - Queries `chatHub.GetClientCount("general")` and `GetOnlineUsers("general")`
 6. **`checkGRPC()`**:
-   - Performs a lightweight "liveness probe" by executing `net.DialTimeout("tcp", "localhost:"+grpcPort, 2s)`
+   - When in-process gRPC is enabled, performs a lightweight TCP dial probe
+   - In the production multi-container shape, reports `disabled` with mode `external`
    - Returns `{status: "healthy", latency}` on success
 
 ---
 
-### 10.3 Comprehensive Health: `GET /health` (Public)
+### 10.3 Minimal Readiness: `GET /health` (Public)
 
-This endpoint aggregates the results from all 6 diagnostic helpers.
+This endpoint is intentionally small. It checks `s.Database.Ping()` because the
+API cannot serve its core workload without SQLite. It does not disclose
+component counts or dependency addresses.
 
 ```
 GET /health
-  │
-  ▼
-func (c *gin.Context)                            // main.go:336
-  │ dbHealth = checkDatabase()
-  │ redisHealth = checkRedis()
-  │ tcpHealth = checkTCP()
-  │ udpHealth = checkUDP()
-  │ wsHealth = checkWebSocket()
-  │ grpcHealth = checkGRPC()
-  │
-  │ overallStatus = "healthy"
-  │ if dbHealth["status"] == "unhealthy": overallStatus = "degraded"
-  ▼
-Response: 200 {
-  "status": "success",
-  "message": "MangaHub API is running",
-  "data": {
-    "status": "healthy",
-    "manga_count": 142,
-    "services": {
-      "api": {"status": "healthy", "port": "8080"},
-      "database": {...},
-      "cache": {...},
-      "tcp": {...},
-      "udp": {...},
-      "websocket": {...},
-      "grpc": {...}
-    }
-  }
-}
+  └─ s.Database.Ping()
+       ├─ success → 200 {"success":true,...,"data":{"status":"healthy"}}
+       └─ failure → 503 {"success":false,"error":"MangaHub API is not ready"}
 ```
+
+The production edge maps only this route directly. `deploy/scripts/healthcheck.sh`
+also verifies valid JSON, healthy state, security headers, frontend availability,
+and that detailed health and Swagger return `404` through the public edge.
 
 ---
 
-### 10.4 Granular Health Routes (Public)
+### 10.4 Granular Health Routes (Private in Production)
 
 For targeted monitoring (e.g., Docker `HEALTHCHECK` instructions or Kubernetes liveness/readiness probes), the system provides granular endpoints that isolate specific components:
 
@@ -3378,7 +3499,11 @@ For targeted monitoring (e.g., Docker `HEALTHCHECK` instructions or Kubernetes l
 | `GET /health/ws` | `checkWebSocket()` | Monitor chat room occupancy |
 | `GET /health/grpc` | `checkGRPC()` | Validate gRPC RPC availability |
 
-All health routes are completely unauthenticated (`Public`), making them suitable for external pinging tools like UptimeRobot or container orchestrators.
+The Go routes themselves do not require a JWT so containers can diagnose them
+inside trusted networking. However, `deploy/nginx/nginx.conf` blocks
+`/api/health/*` with `404`, so they are **not public in the production shape**.
+The root development Compose publishes the API directly on port 8080, which
+means these routes are reachable locally during development.
 
 ---
 
@@ -3386,51 +3511,64 @@ All health routes are completely unauthenticated (`Public`), making them suitabl
 
 ### 11.1 Architecture
 
-MangaHub is deployed as a suite of services using `docker-compose.yml`.
-Despite the fragmented execution models (HTTP, TCP, UDP, gRPC), the system uses
-a single unified `Dockerfile`. Only services that read or persist application
-data receive the shared database volume; the stateless UDP notification server
-does not.
+MangaHub uses the root `docker-compose.yml` for direct local development and
+`deploy/docker/docker-compose.prod.yml` for release behavior. Both reuse one
+backend image for the API, CLI, TCP, UDP, gRPC, and database tool. The
+production shape additionally provides an unprivileged edge proxy, isolated
+networks, hardened containers, operational profiles, and optional raw-port and
+CloudWatch overrides.
 
 ### 11.2 Multi-Stage Build (`Dockerfile`)
 
 ```dockerfile
-# ─── STAGE 1: BUILDER ───
-FROM golang:1.26.6 AS builder
-# Requires Debian-based golang image for GCC/CGO (SQLite requires C bindings)
+# Build stage: Debian + CGO for SQLite and FTS5
+FROM golang:1.26.6-bookworm AS builder
 ENV GOFLAGS=-tags=sqlite_fts5
-COPY . .
-# Builds all 5 entrypoints into binaries
-RUN go build -o /app/bin/api-server ./cmd/api-server
-RUN go build -o /app/bin/udp-server ./cmd/udp-server
-RUN go build -o /app/bin/tcp-server ./cmd/tcp-server
-RUN go build -o /app/bin/grpc-server ./cmd/grpc-server
-RUN go build -o /app/bin/mangahub ./cmd/cli
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod verify
+COPY cmd ./cmd
+COPY data ./data
+COPY docs ./docs
+COPY internal ./internal
+COPY pkg ./pkg
+COPY proto ./proto
+# Builds API, TCP, UDP, gRPC, db-tool, and CLI with trimmed paths/symbols.
 
-# ─── STAGE 2: RUNNER ───
+# Runtime stage: no compiler; fixed non-root identity
 FROM debian:12-slim
-# Copies all 5 binaries from the builder stage
-COPY --from=builder /app/bin/* /usr/local/bin/
-CMD ["api-server"] # Default execution
+RUN groupadd --system --gid 10001 mangahub && \
+    useradd --system --uid 10001 --gid mangahub --home-dir /nonexistent \
+      --shell /usr/sbin/nologin mangahub
+COPY --from=builder --chown=10001:10001 /app/bin/* /usr/local/bin/
+USER 10001:10001
+CMD ["api-server"]
 ```
 
-**Key Takeaways:**
-- **CGO Dependency**: Because the system relies on `go-sqlite3` which uses C bindings, we use `golang:1.26.6` (Debian-based, GCC included) rather than Alpine.
-- **Unified Image**: A single Docker image contains all binaries (`api-server`, `tcp-server`, `udp-server`, `grpc-server`, `mangahub`).
+Key properties are dependency verification, BuildKit caches, a compiler-free
+runtime, and UID/GID `10001`. Production Compose then adds read-only root
+filesystems, dropped Linux capabilities, `no-new-privileges`, bounded `tmpfs`
+mounts, and init/restart behavior.
 
 ---
 
-### 11.3 Microservices Topology (`docker-compose.yml`)
+### 11.3 Production Microservices Topology
 
-The compose file defines 5 independent services that communicate internally:
+| Service | Command/image | Networks | Host port in base mode | Role |
+|---|---|---|---:|---|
+| `edge` | pinned unprivileged Nginx | `frontend` | HTTP `${HOST_HTTP_PORT}` | Only public browser entry |
+| `frontend` | React build served by Nginx | `frontend` | None | SPA and static assets |
+| `mangahub-api` | `api-server` | `frontend`, `backend` | None | REST, WebSocket, SSE |
+| `redis` | pinned Redis | `backend` | None | Cache |
+| `mangahub-tcp` | `tcp-server` | `backend` | None | Progress sync |
+| `mangahub-udp` | `udp-server` | `backend` | None | Stateless notifications |
+| `mangahub-grpc` | `grpc-server` | `backend` | None | Unary/streaming RPC |
+| `data-init` | short-lived backend image | no network | None | Sets data-volume ownership |
+| `db-admin`, `backup-init` | operations profile | no network | None | Backup/verify/restore plumbing |
 
-| Service Name | Command | Exposed Port | Internal Dependency | Role |
-|--------------|---------|--------------|---------------------|------|
-| `redis` | `redis-server` | `6379` | None | Distributed caching |
-| `mangahub-api` | `api-server` | `8080` | `redis`, tcp, udp, grpc | HTTP API & WebSocket Chat |
-| `mangahub-tcp` | `tcp-server` | `9090` | Shared SQLite volume | Sync progress & strategies |
-| `mangahub-udp` | `udp-server` | `9091/udp` | None | Broadcast notifications |
-| `mangahub-grpc`| `grpc-server` | `9092` | Shared SQLite volume | Remote Procedure Calls |
+The `backend` network is Docker-internal. `docker-compose.raw.yml` explicitly
+adds host listeners `9090/tcp`, `9091/udp`, and `9092/tcp`; it is never part of
+base mode. `docker-compose.cloudwatch.yml` changes logging only and exposes no
+ports.
 
 ---
 
@@ -3440,8 +3578,9 @@ The compose file defines 5 independent services that communicate internally:
 
 ```yaml
 volumes:
-  mangahub-data:
-    driver: local
+  mangahub-data:      # SQLite source of truth
+  mangahub-backups:   # verified backup/checksum pairs
+  redis-data:         # disposable cache persistence
 
 services:
   mangahub-api:  { volumes: ["mangahub-data:/app/data"] }
@@ -3449,20 +3588,21 @@ services:
   mangahub-grpc: { volumes: ["mangahub-data:/app/data"] }
 ```
 
-Because SQLite is a file-based database, deploying it in a microservice environment requires **sharing the database file** (`mangahub.db`) across all containers via the `mangahub-data` volume.
+Because SQLite is file-based, every database-using service shares
+`/app/data/mangahub.db` through `mangahub-data`.
 
 The sharing statement applies only to the API, TCP, and gRPC services that use
 SQLite. UDP notifications remain stateless and have no database mount.
 
-**How it prevents locks:**
-- `go-sqlite3` is configured with `_journal_mode=WAL` (Write-Ahead Logging) during connection.
-- WAL mode allows simultaneous readers and writers, preventing `database is locked` errors when `mangahub-api` and `mangahub-tcp` try to write concurrently.
+`go-sqlite3` uses WAL mode and a busy timeout so readers and writers can
+cooperate. That reduces normal lock contention; it does not turn SQLite into a
+distributed or highly available database.
 
 ---
 
 ### 11.5 Startup Sequence & Healthchecks
 
-`docker-compose.yml` ensures that the API server waits for Redis to become healthy before attempting connections:
+Production Compose orders readiness-sensitive dependencies:
 
 ```yaml
 # redis service
@@ -3472,16 +3612,22 @@ healthcheck:
 
 # mangahub-api service
 depends_on:
+  data-init:
+    condition: service_completed_successfully
   redis:
     condition: service_healthy
   mangahub-tcp:
     condition: service_started
 ```
 
-1. **Redis** boots and runs its `healthcheck`.
-2. **TCP/UDP/gRPC** servers boot (`service_started`).
-3. **API Server** boots only when Redis is marked `healthy` and the other servers are started.
-4. If an internal server is missing, the API disables proxy routes by inspecting the `TCP_PORT`, `UDP_PORT`, and `GRPC_PORT` environment variables.
+1. `data-init` gives UID `10001` ownership of the persistent data volume and exits.
+2. Redis becomes healthy; TCP, UDP, and gRPC start as standalone containers.
+3. The API starts with in-process raw servers disabled and connects to the
+   standalone service addresses.
+4. Frontend and API container health checks pass.
+5. Edge Nginx starts and exposes the application.
+6. `deploy.sh` waits for all seven long-running services, then runs the public
+   behavior/security health gate before recording the release as current.
 
 ---
 
@@ -3717,7 +3863,7 @@ swag init -g cmd/api-server/main.go -o docs
 
 ---
 
-## 15. CI/CD Pipeline (GitHub Actions)
+## 15. CI and Immutable Image Publication (GitHub Actions)
 
 ### 15.1 Workflow File
 
@@ -3727,51 +3873,51 @@ swag init -g cmd/api-server/main.go -o docs
 
 ### 15.2 Jobs and Trigger Logic
 
+Pushes to `main`, `develop`, or `features/devsecops` run CI. Pull requests into
+`main` run the same gates but do not publish images.
+
+| Job | Main checks | Dependency |
+|---|---|---|
+| `security` | Reusable dependency, Git-history secret, Trivy repository/image, and PR dependency-review gates | Independent |
+| `operations` | Bash syntax, monitoring JSON, pinned ShellCheck image, health-metric publisher contract | Independent |
+| `build-and-test` | Module verification; six Go binaries; focused race tests; complete test suite; `go vet` | Independent |
+| `frontend` | Locked install, TypeScript, ESLint, high-severity npm audit, production build | Independent |
+| `e2e` | Ephemeral backend plus Playwright browser journey; report artifact always uploaded | Backend + frontend |
+| `docker` | Development image build/smoke; production Compose merge for base/raw/CloudWatch modes | Backend + frontend |
+| `publish` | Builds and pushes linux/amd64 backend and frontend images | Docker + E2E + security + operations |
+
+Every third-party action is pinned to a full commit digest. `security.yml` also
+runs weekly and can be started manually.
+
+Publication is intentionally narrower than CI:
+
+```text
+successful push to features/devsecops
+  └─ ghcr.io/anhhuynh1707/mangahub:sha-<full-commit>
+  └─ ghcr.io/anhhuynh1707/mangahub-frontend:sha-<full-commit>
+
+successful push to main
+  ├─ the same two full-SHA tags
+  └─ convenience latest tags (not used by deploy.sh or rollback.sh)
 ```
-Push to main / PR to main
-        │
-        ▼
-Job 1: build-and-test  (ubuntu-latest)
-  ├── actions/checkout@v4
-  ├── actions/setup-go@v5  (reads version from go.mod)
-  ├── go mod download + go mod verify
-  ├── go build ./cmd/api-server/
-  ├── go build ./cmd/tcp-server/
-  ├── go build ./cmd/udp-server/
-  ├── go build ./cmd/grpc-server/
-  ├── go build ./cmd/cli/
-  ├── go test -race -v ./internal/auth/...
-  ├── go test -race -v ./internal/tcp/...
-  ├── go test -race -v ./pkg/sanitize/...
-  └── go vet ./...
-        │
-        ▼ (needs: build-and-test)
-Job 2: docker  (ubuntu-latest)
-  ├── docker compose build
-  ├── docker compose up -d
-  ├── poll localhost:8080/health (30 retries × 3s)
-  ├── verify JSON response
-  ├── docker compose logs --tail=50  (always)
-  └── docker compose down -v         (always)
-        │
-        ▼ (needs: docker — push to main only)
-Job 3: publish  (ubuntu-latest)
-  ├── docker/login-action@v3  → ghcr.io (GITHUB_TOKEN)
-  ├── docker/metadata-action@v5  → tags: latest + sha-<commit>
-  ├── docker/setup-buildx-action@v3
-  └── docker/build-push-action@v6
-        push: ghcr.io/anhhuynh1707/mangahub:latest
-        push: ghcr.io/anhhuynh1707/mangahub:sha-<commit>
-```
+
+The workflow publishes images; it does **not** deploy to EC2. Manual EC2 proof
+must pass before controlled automated deployment is considered.
 
 ### 15.3 Test Files
 
 | File | Tests | What They Cover |
 |------|-------|----------------|
-| `internal/auth/jwt_test.go` | 8 | GenerateToken, ValidateToken (valid / expired / tampered / wrong secret) |
-| `internal/tcp/protocol_test.go` | 9 | Encode/decode roundtrip, factory functions, omitempty |
-| `internal/tcp/conflict_test.go` | 9 | All 3 strategies, concurrent safety, conflict log |
-| `pkg/sanitize/sanitize_test.go` | 26 | Text, ID, Username, ChatMessage |
+| `internal/auth/*_test.go` | JWT and auth behavior | Valid, expired, tampered, and wrong-secret cases |
+| `internal/tcp/*_test.go` | TCP protocol and conflicts | Encoding, all strategies, concurrency, conflict log |
+| `internal/udp/server_test.go` | UDP server behavior | Lifecycle, registration, broadcast/ACK paths |
+| `internal/dbops/dbops_test.go` | SQLite operations | Online backup, verification, restore, invalid-input guards |
+| `pkg/sanitize/sanitize_test.go` | Input validation | Text, ID, username, and chat constraints |
+| `pkg/ratelimit/ratelimit_test.go` | Request limits | Public/auth buckets, 429 response, health exemption |
+| `cmd/api-server/bootstrap_test.go` | Proxy/CORS configuration | Explicit origins, safe default, trusted proxy parsing |
+| `cmd/cli/client_test.go` | Remote endpoint configuration | Environment overrides for HTTP/TCP/UDP/gRPC |
+| `frontend/e2e/journey.spec.ts` | Browser journey | Register through cleanup against a real backend |
+| `deploy/tests/publish-health-metrics.test.sh` | Operations metrics | Healthy and unhealthy publisher contract |
 
 ---
 
@@ -4436,6 +4582,132 @@ PageShell (authed shell) ─ mounts ─► useServerEvents()      // frontend/sr
 - **Rate limiting:** `/events` is in the exempt-prefix list in
   `pkg/ratelimit/ratelimit.go` (alongside `/health` and `/swagger`) so a
   long-lived stream is never counted against the per-IP token bucket.
+
+---
+
+## 22. AWS/EC2 DevSecOps Delivery Flow and File Overview
+
+This section explains the material added on `features/devsecops`. The attached
+phase checklist is a planning input; it is not executable configuration and a
+checked planning box is not AWS evidence.
+
+### 22.1 Release lifecycle
+
+```text
+1. Developer changes features/devsecops
+   └─ local tests and production-style proof
+
+2. Push branch
+   └─ GitHub Actions: code + frontend + E2E + security + operations + Docker
+
+3. Every gate passes
+   └─ GHCR publishes backend and frontend sha-<full-commit> candidates
+
+4. Operator enters EC2 through SSM (manual AWS step; still pending)
+   ├─ configure-server.sh writes a protected runtime environment once
+   └─ deploy.sh pulls that exact pair of images
+
+5. Compose starts without deleting volumes
+   └─ healthcheck.sh validates health, JSON, headers, private-route blocking,
+      Swagger blocking, and the frontend
+
+6. Only after success
+   └─ current-version/current-mode and deployments.tsv are advanced
+
+7. Operational safety
+   ├─ rollback.sh redeploys the previous recorded SHA and mode
+   ├─ backup.sh creates and verifies an online SQLite backup
+   ├─ restore.sh creates a recovery point and restores atomically
+   └─ optional monitoring publishes bounded logs and four custom metrics
+```
+
+The deploy script accepts four effective modes:
+
+| Mode | Compose files | Public behavior |
+|---|---|---|
+| `base` | production | HTTP edge only |
+| `raw` | production + raw | HTTP plus owner-restricted TCP/UDP/gRPC |
+| `cloudwatch` | production + CloudWatch | HTTP plus CloudWatch container logs |
+| `raw-cloudwatch` | all three | Both optional capabilities |
+
+`--with-raw` does not secure the network by itself. On EC2 it is valid only
+while Security Group rules restrict 9090/TCP, 9091/UDP, and 9092/TCP to the
+owner's current IPv4 `/32`.
+
+### 22.2 New deployment and infrastructure files
+
+| File | Why it exists | Used when |
+|---|---|---|
+| `deploy/README.md` | Deployment contract and compact operator entry point | Before local or EC2 release work |
+| `deploy/docker/.env.example` | Documents non-secret runtime inputs and immutable image naming | Creating a local test environment; never used as a real secret file |
+| `deploy/docker/docker-compose.prod.yml` | Hardened production services, private networks, volumes, and operational profiles | Every production-style run |
+| `deploy/docker/docker-compose.prod.local.yml` | Replaces registry images with local builds | Local production proof only |
+| `deploy/docker/docker-compose.raw.yml` | Adds opt-in raw TCP/UDP/gRPC host bindings | Short controlled protocol demo |
+| `deploy/docker/docker-compose.cloudwatch.yml` | Sends seven service streams through Docker's non-blocking `awslogs` driver | After CloudWatch prerequisites pass |
+| `deploy/nginx/nginx.conf` | Same-origin frontend/API routing, WebSocket upgrade, unbuffered SSE, security headers, private diagnostic blocking | Production edge |
+| `deploy/scripts/configure-server.sh` | Creates `/opt/mangahub/.env` once, root-owned mode `0600`, without printing the JWT secret | First EC2 application setup |
+| `deploy/scripts/deploy.sh` | Pulls and health-gates one exact full-SHA backend/frontend release | Manual release and later CD primitive |
+| `deploy/scripts/healthcheck.sh` | Tests public readiness and exposure/security behavior | Every deploy, restore, and manual check |
+| `deploy/scripts/rollback.sh` | Reuses `deploy.sh` for the previous or explicit SHA/mode | Failed-release recovery |
+| `deploy/scripts/backup.sh` | Creates online, integrity-checked, checksummed SQLite backups with retention | Routine data protection |
+| `deploy/scripts/restore.sh` | Verifies backup, creates pre-restore backup, stops DB users, restores, and health-gates | Controlled recovery rehearsal |
+| `deploy/scripts/configure-monitoring.sh` | Validates the EC2 role/Region/log group, installs the agent and systemd publisher | One-time EC2 monitoring setup |
+| `deploy/scripts/publish-health-metrics.sh` | Emits bounded application/container health metrics | Once per minute on EC2 |
+| `deploy/tests/publish-health-metrics.test.sh` | Proves healthy/unhealthy metric output without AWS writes | CI and local operations test |
+| `deploy/aws/MangaHubDemoCloudWatchPolicy.json` | Least-purpose metric/log-write permissions for the EC2 role | AWS monitoring checkpoint |
+| `deploy/cloudwatch/amazon-cloudwatch-agent.json` | Memory and root-filesystem metric collection | CloudWatch Agent setup |
+| `deploy/systemd/mangahub-health-publisher.service` | One-shot least-privilege metric publisher unit | EC2 monitoring |
+| `deploy/systemd/mangahub-health-publisher.timer` | Runs the publisher every minute | EC2 monitoring |
+| `infra/aws/README.md` | Records the deliberately manual infrastructure boundary and future IaC path | Architecture review |
+
+### 22.3 New CI, security, data-safety, and test files
+
+| File | Purpose |
+|---|---|
+| `.github/workflows/security.yml` | Reusable/weekly dependency, secret-history, repository, and image scans |
+| `.github/dependabot.yml` | Automated dependency update proposals |
+| `.gitleaks.toml` | Repository-specific secret-scanning policy |
+| `.dockerignore`, `frontend/.dockerignore` | Keep Git data, local secrets, databases, dependencies, and build output out of image contexts |
+| `cmd/db-tool/main.go` | Container-safe interface for backup, verify, restore, list, and prune operations |
+| `internal/dbops/dbops.go` | Path validation, SQLite backup/integrity/checksum/atomic restore implementation |
+| `internal/dbops/dbops_test.go` | Recovery success and failure-path tests |
+| `cmd/api-server/bootstrap_test.go` | CORS and trusted-proxy security regression tests |
+| `cmd/cli/client_test.go` | Remote endpoint environment override tests |
+| `internal/udp/server_test.go` | UDP lifecycle and delivery tests |
+| `pkg/ratelimit/ratelimit_test.go` | Public/auth limits, 429, and exemption tests |
+
+The existing `.github/workflows/ci.yml`, `Dockerfile`, Compose files, API/CLI,
+UDP service, and frontend were also modified so these additions are exercised
+by the real application rather than existing as unused portfolio files.
+
+### 22.4 New operator and portfolio documents
+
+| File | Question it answers |
+|---|---|
+| `docs/DEVSECOPS.md` | What has actually been implemented and locally verified? |
+| `docs/AWS_DEPLOYMENT.md` | What do I click and run, checkpoint by checkpoint, as a first-time AWS user? |
+| `docs/AWS_ARCHITECTURE.md` | What is the target topology, and which boundary is still pending? |
+| `docs/AWS_EVIDENCE.md` | What sanitized proof is required before claiming “deployed on AWS”? |
+| `docs/SECURITY.md` | What are the trust boundaries, secret rules, and exposure rules? |
+| `docs/ROLLBACK.md` | How is an immutable release reverted without deleting SQLite? |
+| `docs/BACKUP.md` | How are SQLite backup, restore, retention, and failure recovery proven? |
+| `docs/MONITORING.md` | How are CloudWatch permissions, metrics, logs, alarms, and failure rehearsal bounded? |
+| `docs/PORTFOLIO.md` | Which CV claims are truthful now versus after AWS evidence passes? |
+| `docs/MangaHub_AWS_DevSecOps_Phase_Checklist.md` | Original phase plan supplied for the upgrade; planning reference only |
+
+### 22.5 Current verification boundary
+
+| Layer | Current state |
+|---|---|
+| Application tests and local development | Verified |
+| Production Compose, edge routes, raw protocols, persistence, rollback, backup/restore | Verified locally |
+| CI/security/operations gates and matching full-SHA GHCR images | Verified on `features/devsecops` |
+| AWS account security, budget, VPC, Security Group, EC2, SSM | Pending manual checkpoints |
+| Application running on EC2 and CloudWatch evidence | Pending manual checkpoints |
+| Pull request and merge to `main` | Deliberately pending until AWS gates pass |
+
+Never convert a pending row into a portfolio claim from documentation alone.
+The evidence gate is `docs/AWS_EVIDENCE.md`.
 
 ---
 **End of Documentation.**

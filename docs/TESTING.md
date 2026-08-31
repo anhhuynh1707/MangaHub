@@ -1,13 +1,17 @@
 # MangaHub — Testing Guide
 
-> **Last Updated:** 2026-05-05  
-> **Status:** Phase 3 (HTTP + TCP + UDP + WebSocket) Complete  
-> **Ports:** API `:8080` | TCP Sync `:9090` | UDP Notify `:9091` | WebSocket Chat `:8080/ws/chat`
+> **Last updated:** 2026-08-31
+> **Status:** application, CI, and local production-style gates implemented;
+> manual AWS/EC2 evidence is still pending
+> **Development ports:** frontend `:3000` | API/WebSocket/SSE `:8080` |
+> TCP `:9090` | UDP `:9091/udp` | gRPC `:9092`
+> **Production-style port:** edge `:8088` locally or `:80` on the planned EC2 host
 
 ---
 
 ## Table of Contents
 
+0. [Start Here — Testing the Whole System](#0-start-here--testing-the-whole-system)
 1. [Prerequisites & Setup](#1-prerequisites--setup)
 2. [Server Health](#2-server-health)
 3. [Authentication](#3-authentication)
@@ -20,6 +24,80 @@
 10. [Multi-Terminal Sessions](#10-multi-terminal-sessions)
 11. [End-to-End Workflow](#11-end-to-end-workflow)
 12. [Social & Community Features](#12-social--community-features)
+13. [Frontend E2E Tests](#frontend-e2e-tests-playwright)
+14. [DevSecOps, Production, and AWS Verification](#devsecops-production-and-aws-verification)
+
+---
+
+## 0. Start Here — Testing the Whole System
+
+This guide has two levels:
+
+- Sections 1–24 are feature recipes for HTTP, CLI, TCP, UDP, WebSocket, gRPC,
+  SSE, data import/export, and the React frontend.
+- The final DevSecOps section is the system release ladder: source checks,
+  production Compose, security, immutable images, EC2, rollback, backup, and
+  monitoring.
+
+Read [`CODE_FLOW.md`](CODE_FLOW.md) Section 0 first if you do not yet know which
+component a test is exercising.
+
+### 0.1 The validation ladder
+
+Run the lowest useful layer first. A higher layer complements the lower layers;
+it does not replace them.
+
+| Layer | What a pass means | Where it runs |
+|---|---|---|
+| 1. Static/unit | Go behavior, types, lint, and frontend build are sound | Developer machine + CI |
+| 2. Feature/integration | HTTP and each real-time protocol behave as intended | Developer machine |
+| 3. Browser E2E | A real user journey crosses React and the API | Developer machine + CI |
+| 4. Development Compose | All directly exposed learning services start together | Docker + CI smoke test |
+| 5. Production-style Compose | Edge routing, private services, hardening, persistence, and optional raw mode work | Developer machine |
+| 6. Security/operations | Dependencies, secrets, images, shell scripts, and operational contracts pass policy | CI; selected local checks |
+| 7. Immutable release | Matching backend/frontend images exist for one full Git SHA | GHCR after green branch CI |
+| 8. AWS runtime | The exact release works on the documented Sydney EC2 environment | Manual; not yet run |
+| 9. Recovery/monitoring | EC2 rollback, backup/restore, metrics, logs, alarms, and failure rehearsal are proven | Manual; not yet run on AWS |
+
+### 0.2 Fast feedback before a push
+
+From the repository root:
+
+```bash
+go test -timeout 120s ./...
+go vet ./...
+
+cd frontend
+npm ci
+npx tsc --noEmit
+npm run lint
+npm run build
+cd ..
+```
+
+The complete Go suite includes socket tests. If a restricted execution
+environment blocks opening a loopback UDP socket, that is an environment denial,
+not automatically an application failure; rerun in a normal local terminal or
+CI and record the actual result.
+
+### 0.3 Test-data and secret rules
+
+- Use generated, disposable JWT secrets; never paste an AWS key, production
+  token, or MFA code into a command, screenshot, issue, or committed file.
+- The root development database is local test data. Do not use reset commands
+  against an EC2 volume.
+- Stop production-style Compose with `down`, never `down -v`; `-v` deletes the
+  SQLite and backup volumes.
+- Raw protocol ports are loopback-only in local production tests. On EC2 they
+  require temporary owner IPv4 `/32` Security Group rules.
+- Do not mark an AWS evidence row `PASS` from a local test or from a screenshot
+  of a setup page. Observe the finished resource and the required behavior.
+
+### 0.4 Command conventions
+
+Most original feature recipes below use PowerShell. The system-wide DevSecOps
+commands use Bash because the target server is Amazon Linux 2023. Run commands
+from the repository root unless the example explicitly enters `frontend/`.
 
 ---
 
@@ -27,38 +105,39 @@
 
 ### Build Everything
 
-```powershell
-cd C:\Users\Dell\Documents\Go\mangahub
-
-# Build API server
+```bash
+# Run from the cloned MangaHub repository root.
+go mod download
+go mod verify
 go build ./cmd/api-server/
-
-# Build CLI
-go build -o mangahub.exe ./cmd/cli/
-
-# Build TCP test client
+go build ./cmd/cli/
 go build ./cmd/tcp-client/
-
-# Build standalone TCP server
 go build ./cmd/tcp-server/
-
-# Build standalone UDP server
 go build ./cmd/udp-server/
-
-# Build standalone gRPC server
 go build ./cmd/grpc-server/
+go build ./cmd/db-tool/
 ```
 
 ### Fresh Database Reset
 
+This is only for the local development database. Stop every local
+process/container using it first. Rename the file so the reset remains
+recoverable until you deliberately remove the backup.
+
+```bash
+mv ./data/mangahub.db ./data/mangahub.db.reset-backup
+```
+
+PowerShell equivalent:
+
 ```powershell
-# Stop server first, then:
-Remove-Item .\data\mangahub.db -Force -ErrorAction SilentlyContinue
+Move-Item .\data\mangahub.db .\data\mangahub.db.reset-backup
 ```
 
 ### Start Server
 
-```powershell
+```bash
+export JWT_SECRET="$(openssl rand -base64 48)"
 go run ./cmd/api-server/
 ```
 
@@ -134,9 +213,15 @@ curl -s http://localhost:8080/health | ConvertFrom-Json | ConvertTo-Json
 {
   "success": true,
   "message": "MangaHub API is running",
-  "data": { "status": "healthy", "manga_count": 200 }
+  "data": { "status": "healthy" }
 }
 ```
+
+`/health` is intentionally minimal. In direct local development, detailed
+diagnostics remain available at `/health/db`, `/health/cache`, `/health/tcp`,
+`/health/udp`, `/health/ws`, and `/health/grpc`. The production edge must return
+`404` for the corresponding `/api/health/*` paths so internal counts and service
+details are not exposed publicly.
 
 ---
 
@@ -1177,7 +1262,7 @@ Creating full backup for alice...
 ```powershell
 # Import library entries from a previously exported JSON file
 .\mangahub.exe import library --file library.json
-`````````
+```
 
 **Expected output:**
 ```
@@ -1187,8 +1272,6 @@ Importing library from library.json...
   Imported: 2 entries
   Skipped:  1 (already in library)
 ```
-```
-
 ### 14.6 Import Progress from CSV (CLI)
 
 ```powershell
@@ -1493,27 +1576,46 @@ Info: MangaHub API v1.0
 
 ---
 
-## S17. GitHub Actions CI/CD Pipeline
+## S17. GitHub Actions CI and Image Publication
 
 ### S17.1 Trigger CI
-Push any commit to `main` or open a PR:
-```powershell
-git push origin main
+Push the current branch, or later open a pull request into `main`:
+
+```bash
+git push origin features/devsecops
 ```
-Go to **github.com/anhhuynh1707/MangaHub → Actions** tab.
+
+Go to **github.com/anhhuynh1707/MangaHub → Actions**. Pushes to
+`features/devsecops`, `develop`, and `main` run CI; pull requests into `main`
+also run CI.
 
 ### S17.2 Expected Jobs
-| Job | Description | Trigger |
-|-----|-------------|---------|
-| **Build & Test** | Go build + unit tests + go vet | Push / PR |
-| **Docker Build & Smoke Test** | `docker compose build` + `up -d` + health check | After Build & Test passes |
-| **Publish to GHCR** | Pushes `ghcr.io/anhhuynh1707/mangahub:latest` | Push to main only |
+| Job | Required behavior |
+|---|---|
+| **Security gates** | Dependency audit, Gitleaks history scan, Trivy repository and production-image scans; PR dependency review where applicable |
+| **Deployment script checks** | Bash syntax, monitoring JSON, ShellCheck, and health-metric publisher test |
+| **Build & Test** | All backend binaries, focused race tests, complete Go suite, and `go vet` |
+| **Frontend Build & Type Check** | Locked install, TypeScript, ESLint, npm high-severity audit, and build |
+| **E2E Tests (Playwright)** | Real browser journey against an ephemeral backend; report uploaded |
+| **Docker Build & Smoke Test** | Development smoke plus production base/raw/CloudWatch Compose rendering |
+| **Publish immutable images to GHCR** | Runs only after all required gates on a push to `features/devsecops` or `main` |
+
+Pull requests publish no image. A successful `features/devsecops` push publishes
+only full-commit tags. A successful `main` push also updates the convenience
+`latest` tags, but deployment never uses `latest`.
 
 ### S17.3 Pull Published Docker Image
-```powershell
-docker pull ghcr.io/anhhuynh1707/mangahub:latest
-docker run -p 8080:8080 ghcr.io/anhhuynh1707/mangahub:latest
+Use one exact 40-character commit shared by backend and frontend:
+
+```bash
+FULL_SHA="$(git rev-parse HEAD)"
+docker buildx imagetools inspect "ghcr.io/anhhuynh1707/mangahub:sha-${FULL_SHA}"
+docker buildx imagetools inspect "ghcr.io/anhhuynh1707/mangahub-frontend:sha-${FULL_SHA}"
 ```
+
+Both manifests must exist and include `linux/amd64` before that release is used
+on the planned x86_64 EC2 instance. Do not run the backend image alone as the
+production proof; the release contract is the complete Compose topology.
 
 ---
 
@@ -1997,6 +2099,253 @@ This also runs automatically as a `prebuild` step (`npm run build`). If the spec
 is missing/broken, the build falls back to the committed `src/api/schema.d.ts`.
 When the backend API changes, re-copy the spec
 (`cp docs/swagger.json frontend/openapi.json`) and re-run `gen:api`.
+
+---
+
+## DevSecOps, Production, and AWS Verification
+
+This is the end-to-end release checklist for the AWS upgrade. Run it in order.
+If one layer fails, diagnose that layer before moving upward.
+
+### D1. Backend and frontend source gates
+
+```bash
+# Repository root
+go mod verify
+go test -timeout 120s ./...
+go vet ./...
+
+cd frontend
+npm ci
+npx tsc --noEmit
+npm run lint
+npm audit --audit-level=high
+npm run build
+cd ..
+```
+
+Expected: every command exits `0`. A committed generated API type file may be
+used if the documented generation fallback is activated, but TypeScript and the
+final Vite build must still pass.
+
+### D2. Deployment configuration and script gates
+
+```bash
+bash -n deploy/scripts/*.sh deploy/tests/*.sh
+jq empty \
+  deploy/aws/MangaHubDemoCloudWatchPolicy.json \
+  deploy/cloudwatch/amazon-cloudwatch-agent.json
+
+docker run --rm \
+  -v "$PWD:/workspace:ro" \
+  -w /workspace \
+  koalaman/shellcheck-alpine@sha256:9955be09ea7f0dbf7ae942ac1f2094355bb30d96fffba0ec09f5432207544002 \
+  shellcheck --severity=warning deploy/scripts/*.sh deploy/tests/*.sh
+```
+
+The health-metric publisher contract needs Linux root semantics. CI runs:
+
+```bash
+sudo ./deploy/tests/publish-health-metrics.test.sh
+```
+
+Do not run the EC2 operator scripts (`configure-server.sh`, `deploy.sh`,
+`restore.sh`, or `configure-monitoring.sh`) with `sudo` on macOS. They are
+fail-closed Amazon Linux/server tools, not local installers.
+
+### D3. Development Compose smoke test
+
+This validates the simple learning topology in the repository root:
+
+```bash
+export JWT_SECRET="$(openssl rand -base64 48)"
+docker compose config --quiet
+docker compose up -d --build
+curl --fail http://127.0.0.1:8080/health
+docker compose ps
+docker compose down
+```
+
+Expected: frontend `3000`, API `8080`, Redis `6379`, TCP `9090`, UDP `9091`, and
+gRPC `9092` are directly published. `down` retains named volumes; do not add
+`-v` when you are testing persistence.
+
+### D4. Production-style base mode
+
+Base mode is the configuration that should be proven before AWS. It builds from
+local source but otherwise uses the EC2 topology.
+
+```bash
+export JWT_SECRET="$(openssl rand -base64 48)"
+export HOST_HTTP_PORT=8088
+export PUBLIC_ORIGIN=http://localhost:8088
+
+docker compose --project-name mangahub-prod \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  config --quiet
+
+docker compose --project-name mangahub-prod \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  up -d --build
+
+./deploy/scripts/healthcheck.sh http://127.0.0.1:8088
+
+docker compose --project-name mangahub-prod \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  ps
+```
+
+Expected:
+
+- seven long-running services are running; `data-init` exited successfully;
+- `/health` returns healthy JSON with public security headers;
+- `/` returns the React app;
+- `/api/health/db` and `/api/swagger/index.html` both return `404`;
+- only edge port `8088` is published in base mode;
+- API, Redis, frontend, TCP, UDP, gRPC, and SQLite are not direct host
+  listeners.
+
+Inspect hardening on a representative backend container:
+
+```bash
+API_ID="$(docker compose --project-name mangahub-prod \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  ps -q mangahub-api)"
+
+docker inspect --format \
+  'user={{.Config.User}} readonly={{.HostConfig.ReadonlyRootfs}} caps={{json .HostConfig.CapDrop}} security={{json .HostConfig.SecurityOpt}}' \
+  "$API_ID"
+```
+
+Expected: user `10001:10001`, read-only root filesystem, all capabilities
+dropped, and `no-new-privileges` enabled.
+
+### D5. Optional raw-protocol mode
+
+The local override binds the raw listeners to `127.0.0.1` by default:
+
+```bash
+docker compose --project-name mangahub-prod \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  -f deploy/docker/docker-compose.raw.yml \
+  config --quiet
+
+docker compose --project-name mangahub-prod \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  -f deploy/docker/docker-compose.raw.yml \
+  up -d --build
+```
+
+Use Sections 7, S22, and S23 to exercise TCP, UDP ACK, and gRPC streaming. Then
+rerun the HTTP health gate. The protocols are additional listeners; they do not
+replace browser HTTP/WebSocket/SSE.
+
+Return to base mode or stop cleanly without deleting volumes:
+
+```bash
+docker compose --project-name mangahub-prod \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.prod.local.yml \
+  -f deploy/docker/docker-compose.raw.yml \
+  down
+```
+
+### D6. CloudWatch configuration gate (local render only)
+
+The `awslogs` runtime should not be started locally unless real scoped AWS
+prerequisites exist. Rendering proves the override merges correctly without
+making an AWS call:
+
+```bash
+export MANGAHUB_AWS_REGION=ap-southeast-2
+export MANGAHUB_CLOUDWATCH_LOG_GROUP=/mangahub/demo/containers
+
+docker compose \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.cloudwatch.yml \
+  config --quiet
+
+docker compose \
+  -f deploy/docker/docker-compose.prod.yml \
+  -f deploy/docker/docker-compose.raw.yml \
+  -f deploy/docker/docker-compose.cloudwatch.yml \
+  config --quiet
+```
+
+### D7. CI and immutable GHCR candidate
+
+After pushing `features/devsecops`, verify all jobs listed in S17 are green.
+Then use the exact branch tip:
+
+```bash
+FULL_SHA="$(git rev-parse HEAD)"
+test "$(printf '%s' "$FULL_SHA" | wc -c | tr -d ' ')" = 40
+
+docker buildx imagetools inspect \
+  "ghcr.io/anhhuynh1707/mangahub:sha-${FULL_SHA}"
+docker buildx imagetools inspect \
+  "ghcr.io/anhhuynh1707/mangahub-frontend:sha-${FULL_SHA}"
+```
+
+Both images must exist for the same SHA and include `linux/amd64`. Do not deploy
+a short SHA, an unmatched image pair, or `latest`.
+
+### D8. Manual AWS/EC2 gate — pending
+
+The next cloud action remains Checkpoint A in
+[`AWS_DEPLOYMENT.md`](AWS_DEPLOYMENT.md). Continue only in this order:
+
+1. Root MFA, root billing-IAM access, daily console administrator MFA with zero
+   access keys, USD 5 budget, and Sydney Region.
+2. EC2 instance role for Session Manager.
+3. Dedicated `10.20.0.0/16` learning VPC, public subnet, Internet Gateway, and
+   explicit route table.
+4. Security Group with public HTTP 80, no SSH, and no raw ports initially.
+5. One approved Amazon Linux 2023 x86_64 instance with encrypted 8 GiB gp3 and
+   IMDSv2 required.
+6. Session Manager access and Docker installation.
+7. Exact-SHA base deployment and public browser/API behavior.
+8. Temporary owner `/32` raw rules plus `--with-raw`, followed by rule removal.
+9. EC2 rollback, SQLite backup/restore, CloudWatch logs/metrics/alarms, and a
+   controlled failure/recovery rehearsal.
+
+Record only sanitized observations in [`AWS_EVIDENCE.md`](AWS_EVIDENCE.md).
+Every AWS row remains `NOT RUN` until the corresponding finished state and
+behavior are observed. Local green tests do not satisfy an AWS row.
+
+### D9. Recovery and observability acceptance
+
+Use the dedicated runbooks rather than improvising:
+
+| Capability | Required acceptance evidence | Runbook |
+|---|---|---|
+| Release rollback | Previous full SHA and mode restored; health and demo data persist | [`ROLLBACK.md`](ROLLBACK.md) |
+| SQLite backup | Online backup, integrity `ok`, checksum, retention, protected ownership | [`BACKUP.md`](BACKUP.md) |
+| SQLite restore | Pre-restore point, controlled data reversal, same release mode, health pass | [`BACKUP.md`](BACKUP.md) |
+| CloudWatch | Four metrics, seven bounded log streams, five alarms, alarm failure and recovery | [`MONITORING.md`](MONITORING.md) |
+
+Image rollback and database restore solve different failures. Never substitute
+one for the other, and never delete a volume to make a failed test appear clean.
+
+### D10. Which AWS-upgrade files these tests cover
+
+| Test group | Main artifacts exercised |
+|---|---|
+| Production runtime | `deploy/docker/*`, `deploy/nginx/nginx.conf`, backend/frontend Dockerfiles |
+| Release safety | `configure-server.sh`, `deploy.sh`, `healthcheck.sh`, `rollback.sh` |
+| Data recovery | `cmd/db-tool/`, `internal/dbops/`, `backup.sh`, `restore.sh` |
+| Monitoring | CloudWatch policy/agent JSON, log override, publisher, systemd units |
+| Supply chain | `ci.yml`, `security.yml`, Dependabot, Gitleaks, Docker ignore files |
+| Proof boundary | AWS deployment, architecture, evidence, security, portfolio, and operations docs |
+
+For the complete file-by-file explanation, see [`CODE_FLOW.md`](CODE_FLOW.md)
+Section 22.
 
 ---
 
