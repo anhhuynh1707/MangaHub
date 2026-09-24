@@ -25,7 +25,7 @@ jobs:
 
   operations:
     name: Deployment script checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -56,7 +56,7 @@ jobs:
   # ── Backend ───────────────────────────────────────────────────────
   build-and-test:
     name: Build & Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -119,7 +119,7 @@ jobs:
   # ── Frontend ──────────────────────────────────────────────────────
   frontend:
     name: Frontend Build & Type Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -157,7 +157,7 @@ jobs:
   # ── End-to-end (Playwright) ───────────────────────────────────────
   e2e:
     name: E2E Tests (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build-and-test, frontend]
 
     steps:
@@ -219,7 +219,7 @@ jobs:
   # ── Docker ────────────────────────────────────────────────────────
   docker:
     name: Docker Build & Smoke Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build-and-test, frontend]   # gate on both backend AND frontend
 
     steps:
@@ -299,7 +299,7 @@ jobs:
   # ── Publish ───────────────────────────────────────────────────────
   publish:
     name: Publish immutable images to GHCR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [docker, e2e, security, operations]
     if: >-
       github.event_name == 'push' &&
