@@ -1651,6 +1651,19 @@ The tag remains human-readable, but the digest is the actual supply-chain pin.
 The same replacement digest must appear in `frontend/Dockerfile`, production
 Compose, and the explicit pinned-edge scan step.
 
+Remediation record from 2026-09-24:
+
+| Item | Finding / resolution |
+|---|---|
+| Failed artifact | Frontend runtime image built from the pinned unprivileged Nginx edge base |
+| Findings | 11 HIGH Alpine findings across `libexpat` and `libuuid`, including denial-of-service, memory-corruption, and util-linux mount issues |
+| Vulnerable packages | `libexpat` `2.8.3-r0`; `libuuid` `2.42.1-r0` on Alpine `3.24.1` |
+| Fixed packages | `libexpat` `2.8.4-r0`; `libuuid` at least `2.42.3-r1` on Alpine `3.24.2` |
+| Old image digest | `sha256:45ce1e2e699234253d1def7baa96218a5d00b498d1ba0cbb1a17b6bdf73d1351` |
+| Replacement index | `sha256:4714e0b1b2577eaa1a6131d07c958b67f0eb68e6d0521e90c6e5287db8cf0bc5` |
+| Replacement amd64 manifest | `sha256:9f1d635195267228edfdad0bbaacf390031785924f10f8449ff9c934ff765290` |
+| Replacement scan | Trivy 0.72.0: 0 HIGH/CRITICAL vulnerabilities for the immutable multi-architecture digest |
+
 ---
 
 ## S18. UDP Delivery Confirmation (ACK System)
