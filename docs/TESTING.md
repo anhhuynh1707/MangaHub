@@ -1,11 +1,12 @@
 # MangaHub — Testing Guide
 
-> **Last updated:** 2026-08-31
-> **Status:** application, CI, and local production-style gates implemented;
-> manual AWS/EC2 evidence is still pending
+> **Last updated:** 2026-09-24
+> **Status:** application, CI, local production, and the manual Sydney EC2
+> runtime are verified; sanitized AWS evidence closeout and release rollback
+> remain
 > **Development ports:** frontend `:3000` | API/WebSocket/SSE `:8080` |
 > TCP `:9090` | UDP `:9091/udp` | gRPC `:9092`
-> **Production-style port:** edge `:8088` locally or `:80` on the planned EC2 host
+> **Production-style port:** edge `:8088` locally or `:80` on the EC2 demo host
 
 ---
 
@@ -56,8 +57,8 @@ it does not replace them.
 | 5. Production-style Compose | Edge routing, private services, hardening, persistence, and optional raw mode work | Developer machine |
 | 6. Security/operations | Dependencies, secrets, images, shell scripts, and operational contracts pass policy | CI; selected local checks |
 | 7. Immutable release | Matching backend/frontend images exist for one full Git SHA | GHCR after green branch CI |
-| 8. AWS runtime | The exact release works on the documented Sydney EC2 environment | Manual; not yet run |
-| 9. Recovery/monitoring | EC2 rollback, backup/restore, metrics, logs, alarms, and failure rehearsal are proven | Manual; not yet run on AWS |
+| 8. AWS runtime | The exact release works on the documented Sydney EC2 environment | Manual; verified for release `7be4bc8...` |
+| 9. Recovery/monitoring | EC2 rollback, backup/restore, metrics, logs, alarms, and failure rehearsal are proven | Mixed: monitoring failure/recovery runtime verified; rollback and backup evidence still require closeout |
 
 ### 0.2 Fast feedback before a push
 
@@ -2360,10 +2361,11 @@ docker buildx imagetools inspect \
 Both images must exist for the same SHA and include `linux/amd64`. Do not deploy
 a short SHA, an unmatched image pair, or `latest`.
 
-### D8. Manual AWS/EC2 gate — pending
+### D8. Manual AWS/EC2 gate — exercised; evidence closeout in progress
 
-The next cloud action remains Checkpoint A in
-[`AWS_DEPLOYMENT.md`](AWS_DEPLOYMENT.md). Continue only in this order:
+[`AWS_DEPLOYMENT.md`](AWS_DEPLOYMENT.md) was exercised through K9 in this
+order. Individual rows count as complete only where `AWS_EVIDENCE.md` records
+the required observation:
 
 1. Root MFA, root billing-IAM access, daily console administrator MFA with zero
    access keys, USD 5 budget, and Sydney Region.
@@ -2376,12 +2378,37 @@ The next cloud action remains Checkpoint A in
 6. Session Manager access and Docker installation.
 7. Exact-SHA base deployment and public browser/API behavior.
 8. Temporary owner `/32` raw rules plus `--with-raw`, followed by rule removal.
-9. EC2 rollback, SQLite backup/restore, CloudWatch logs/metrics/alarms, and a
-   controlled failure/recovery rehearsal.
+9. CloudWatch logs/metrics/alarms and a controlled edge failure/recovery
+   rehearsal. Release rollback and SQLite backup/restore remain independent
+   evidence gates and must not be inferred from K9.
 
 Record only sanitized observations in [`AWS_EVIDENCE.md`](AWS_EVIDENCE.md).
-Every AWS row remains `NOT RUN` until the corresponding finished state and
-behavior are observed. Local green tests do not satisfy an AWS row.
+An AWS row becomes `PASS` only after the corresponding finished state and
+behavior are observed. Local green tests, operator intent, or a setup-page
+screenshot do not satisfy an AWS row.
+
+Observed EC2 runtime on 2026-09-24:
+
+| Check | Observed result |
+|---|---|
+| Deployed release | `7be4bc8181f394af8446e717d39cd191149dafaa` |
+| Recorded mode | `cloudwatch` |
+| Public health | `GET /health` returned healthy JSON |
+| Long-running services | Seven containers running; edge, frontend, API, and Redis reported healthy where configured |
+| Host publication | Edge alone published host HTTP `80`; raw ports appeared only as container metadata |
+| Log driver | API used `awslogs`, Sydney Region, bounded group/stream, non-blocking mode, and no automatic group creation |
+| Monitoring services | CloudWatch Agent and publisher timer active; one-shot publisher exited `0/SUCCESS` |
+| Published health | `ApplicationHealthy=1`; `HealthyContainers=7` |
+| Failure/recovery | Edge was stopped for the alarm rehearsal and later returned healthy through immutable redeployment |
+
+The edge uptime being shorter than the other six services after K9 is expected:
+it records the controlled stop/recovery rather than a full-stack restart. The
+publisher service normally displays `inactive (dead)` after each run because it
+is a successful one-shot service triggered every minute by its active timer.
+
+The branch later advanced to documentation-only commit `5701cfd...`; that does
+not invalidate or require redeployment of the recorded `7be4bc8...` application
+release.
 
 ### D9. Recovery and observability acceptance
 
@@ -2396,6 +2423,15 @@ Use the dedicated runbooks rather than improvising:
 
 Image rollback and database restore solve different failures. Never substitute
 one for the other, and never delete a volume to make a failed test appear clean.
+
+Current closeout state:
+
+- K9 host health and seven-container recovery are verified.
+- Capture the CloudWatch application alarm history returning to `OK` before
+  marking K4 `PASS`.
+- Preserve the exact backup/restore command output before marking J1/J2 `PASS`.
+- Run a separate release rollback rehearsal before marking R1 `PASS`.
+- Complete Billing/cost review and cleanup decisions before L1/L2 pass.
 
 ### D10. Which AWS-upgrade files these tests cover
 

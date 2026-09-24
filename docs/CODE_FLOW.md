@@ -1,10 +1,11 @@
 # MangaHub — Detailed Code Flow Documentation
 
-> **Last updated:** 2026-08-31
-> **Scope:** application internals, local Docker, and the prepared AWS/EC2
-> delivery path on `features/devsecops`
-> **AWS status:** repository, CI, immutable images, and local production runtime
-> are verified; AWS resources have not been created yet.
+> **Last updated:** 2026-09-24
+> **Scope:** application internals, local Docker, and the manually exercised
+> AWS/EC2 delivery path on `features/devsecops`
+> **AWS status:** a full-SHA release is running on the encrypted Sydney EC2
+> demo with Session Manager administration and CloudWatch mode. Sanitized
+> evidence closeout, release rollback, cost review, and the pull request remain.
 
 ---
 
@@ -24,9 +25,9 @@ GitHub Actions ── tests + E2E + security + Compose/script gates
   │ all required gates pass
   ▼
 GHCR ── backend and frontend images tagged sha-<full-40-character-commit>
-  │ manual pull/deploy (AWS execution is still pending)
+  │ manual pull/deploy through Session Manager (verified on the demo EC2 host)
   ▼
-EC2 / local production-style host
+EC2 Sydney demo / local production-style host
   │
   ├─ edge Nginx :80 on EC2 (:8088 locally)
   │    ├─ /              ──► React frontend Nginx
@@ -45,6 +46,12 @@ EC2 / local production-style host
        ├─ TCP 9090
        ├─ UDP 9091
        └─ gRPC/TCP 9092
+
+CloudWatch (EC2 demo only)
+  ├─ host memory + root-disk metrics
+  ├─ application health + healthy-container metrics every minute
+  ├─ seven fixed container log streams with seven-day retention
+  └─ five alarms -> one confirmed SNS email topic
 ```
 
 There are two deployment shapes:
@@ -4603,7 +4610,7 @@ checked planning box is not AWS evidence.
 3. Every gate passes
    └─ GHCR publishes backend and frontend sha-<full-commit> candidates
 
-4. Operator enters EC2 through SSM (manual AWS step; still pending)
+4. Operator enters EC2 through SSM (manually exercised in Sydney)
    ├─ configure-server.sh writes a protected runtime environment once
    └─ deploy.sh pulls that exact pair of images
 
@@ -4686,8 +4693,8 @@ by the real application rather than existing as unused portfolio files.
 |---|---|
 | `docs/DEVSECOPS.md` | What has actually been implemented and locally verified? |
 | `docs/AWS_DEPLOYMENT.md` | What do I click and run, checkpoint by checkpoint, as a first-time AWS user? |
-| `docs/AWS_ARCHITECTURE.md` | What is the target topology, and which boundary is still pending? |
-| `docs/AWS_EVIDENCE.md` | What sanitized proof is required before claiming “deployed on AWS”? |
+| `docs/AWS_ARCHITECTURE.md` | What is the implemented topology, and which later improvements remain? |
+| `docs/AWS_EVIDENCE.md` | What was observed on AWS and which sanitized proof is still required? |
 | `docs/SECURITY.md` | What are the trust boundaries, secret rules, and exposure rules? |
 | `docs/ROLLBACK.md` | How is an immutable release reverted without deleting SQLite? |
 | `docs/BACKUP.md` | How are SQLite backup, restore, retention, and failure recovery proven? |
@@ -4702,12 +4709,18 @@ by the real application rather than existing as unused portfolio files.
 | Application tests and local development | Verified |
 | Production Compose, edge routes, raw protocols, persistence, rollback, backup/restore | Verified locally |
 | CI/security/operations gates and matching full-SHA GHCR images | Verified on `features/devsecops` |
-| AWS account security, budget, VPC, Security Group, EC2, SSM | Pending manual checkpoints |
-| Application running on EC2 and CloudWatch evidence | Pending manual checkpoints |
-| Pull request and merge to `main` | Deliberately pending until AWS gates pass |
+| AWS VPC, encrypted EC2, SSM, Docker, and immutable deployment | Observed in Sydney; account/metadata/SG screenshots still need evidence review |
+| Application running on EC2 | Verified for `7be4bc8181f394af8446e717d39cd191149dafaa` in `cloudwatch` mode |
+| CloudWatch runtime | Agent/timer and healthy publisher verified; operator reports metrics, streams, SNS, five alarms, and failure detection; sanitized alarm history still required |
+| Recovery | K9 health and seven-container recovery verified; release rollback and AWS backup/restore evidence remain separate gates |
+| Pull request and merge to `main` | Deliberately pending until evidence/documentation closeout |
 
-Never convert a pending row into a portfolio claim from documentation alone.
-The evidence gate is `docs/AWS_EVIDENCE.md`.
+The deployed release is intentionally older than later documentation commits:
+`7be4bc8...` runs on EC2, while the documentation-only sequence beginning with
+`5701cfd...` changes no application or deployment code. Documentation-only
+commits do not require an EC2 redeploy. Never convert an operator report or a
+prepared document into stronger portfolio evidence; the final gate is
+`docs/AWS_EVIDENCE.md`.
 
 ---
 **End of Documentation.**
