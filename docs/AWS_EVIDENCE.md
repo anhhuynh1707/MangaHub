@@ -1,6 +1,7 @@
 # MangaHub AWS verification record
 
-Status: **evidence template ready; no AWS checkpoint has been marked verified**.
+Status: **evidence collection in progress; the initial EC2 baseline requires
+replacement because its root EBS volume is not encrypted**.
 
 This record prevents screenshots or plausible-looking console state from being
 mistaken for proof. Complete rows only after the expected state is observed in
@@ -33,18 +34,18 @@ row is proven; otherwise use `FAIL` or `NEEDS REVIEW`.
 |---|---|---|---|
 | A1 | Root protection | Root MFA enabled; root access keys zero; no secret material visible | NOT RUN |
 | A2 | Daily administrator | Console login requires MFA; access keys zero; existing user or `mangahub-admin` recorded without ARN | NOT RUN |
-| A3 | Billing guardrail | Root activated IAM billing access; `MangaHub-demo-monthly-5USD` and four alert thresholds exist | NOT RUN |
+| A3 | Billing guardrail | `MangaHub-demo-zero-spend` template exists and its notification email is correct | NOT RUN |
 | A4 | Region | Console shows Sydney / `ap-southeast-2` | NOT RUN |
 | B1 | Instance role | `MangaHubDemoEC2Role` trusts EC2 and initially has only `AmazonSSMManagedInstanceCore` | NOT RUN |
 | C1 | VPC | `mangahub-demo-vpc`, `10.20.0.0/16`, project tags | NOT RUN |
 | C2 | Public subnet | `mangahub-public-ap-southeast-2a`, `10.20.1.0/24`, auto-assign public IPv4 enabled | NOT RUN |
 | C3 | Internet route | Named IGW attached; named route table associated; `0.0.0.0/0` targets that IGW | NOT RUN |
 | D1 | Security Group | HTTP 80 public; no SSH; raw ports absent initially | NOT RUN |
-| E1 | EC2 baseline | One AL2023 x86_64 instance; approved type; encrypted 8 GiB gp3; role and project SG attached | NOT RUN |
+| E1 | EC2 baseline | One AL2023 x86_64 instance; approved type; encrypted 8 GiB gp3; role and project SG attached | FAIL |
 | E2 | Metadata and storage | IMDSv2 required; delete-on-termination understood; no Elastic IP | NOT RUN |
-| F1 | Session Manager | Browser Session Manager reaches the instance with no inbound port 22 | NOT RUN |
-| G1 | Docker baseline | Docker and Compose versions return successfully; daemon is not remotely exposed | NOT RUN |
-| H1 | Empty inventory | Named project resources recorded before application deployment | NOT RUN |
+| F1 | Session Manager | Browser Session Manager reaches the instance with no inbound port 22 | PASS |
+| G1 | Docker baseline | Docker and Compose versions return successfully; daemon is not remotely exposed | NEEDS REVIEW |
+| H1 | Empty inventory | Named project resources recorded before application deployment | NEEDS REVIEW |
 | I1 | Immutable deployment | Exact full Git SHA equals `current-version`; matching backend/frontend tags; health gate passes | NOT RUN |
 | I2 | Public behavior | Register, login, browse, library, progress, review, chat, live events, logout work with demo data | NOT RUN |
 | I3 | Raw protocols | TCP, UDP, and gRPC work only after owner `/32` rules and `--with-raw`; rules removed afterward | NOT RUN |
@@ -57,6 +58,39 @@ row is proven; otherwise use `FAIL` or `NEEDS REVIEW`.
 | K4 | Detection and recovery | Stopped edge publishes zero, alarm enters `ALARM`, immutable deploy recovers, alarm returns `OK` | NOT RUN |
 | L1 | Cost review | Billing checked after rehearsal; no unexpected services or duplicate resources | NOT RUN |
 | L2 | Cleanup | Raw rules removed; stop/terminate/delete decisions recorded; wanted backup handled first | NOT RUN |
+
+## Recorded evidence
+
+### 2026-09-24 — Checkpoint H initial inventory
+
+This is the pre-application inventory supplied from the Sydney console. The
+public IPv4 was recorded privately but is deliberately omitted from this public
+repository. These instance-specific values will become historical after the
+unencrypted instance is replaced.
+
+| Resource | Observed value |
+|---|---|
+| Region | `ap-southeast-2` (Sydney) |
+| VPC | `vpc-0888c5169f8ba6704` |
+| Subnet | `subnet-083137c9a78a69094` |
+| Route table | `rtb-0ba27a268632cb28c` |
+| Security Group | `sg-02adbd1291c053bc8` |
+| EC2 instance | `i-07c91e7b6095b4169` |
+| Public IPv4 | Recorded privately; omitted from Git |
+| Instance type | `t3.micro` |
+| AMI | `al2023-ami-2023.12.20260918.0-kernel-6.18-x86_64` |
+| Root EBS volume | `vol-0bd7bea80846f881e` |
+| Root EBS encryption | **Not encrypted — baseline failure** |
+| Session Manager | Browser connection verified; agent active |
+| Docker | Recovered after bootstrap failure; service active |
+| Docker Compose | Reported verified; exact version output still required |
+
+Result: **NEEDS REVIEW**. Do not begin Checkpoint I with this instance. Replace
+the empty instance with one encrypted 8 GiB `gp3` root volume, rerun the Docker
+and Compose version checks, and record the replacement instance, volume, and
+public-address evidence. The first bootstrap failed because Amazon Linux 2023's
+installed `curl-minimal` conflicts with the full `curl` package requested by the
+old user-data command; the deployment guide now omits that conflicting package.
 
 ## Evidence entry template
 

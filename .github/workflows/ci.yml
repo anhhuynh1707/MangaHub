@@ -305,7 +305,9 @@ jobs:
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' ||
       github.ref == 'refs/heads/features/devsecops')
-    timeout-minutes: 15              # fail fast if network hangs again
+    # The backend and frontend images are published sequentially. A cold
+    # frontend BuildKit cache can take more than 15 minutes even when healthy.
+    timeout-minutes: 30
 
     permissions:
       contents: read

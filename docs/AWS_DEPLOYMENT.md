@@ -114,20 +114,17 @@ credentials, then remove the lab IAM user.
 
 1. Search for **Billing and Cost Management**.
 2. Open **Budgets** and choose **Create budget**.
-3. Choose **Customize (advanced)**, then **Cost budget**.
-4. Name it `MangaHub-demo-monthly-5USD`.
-5. Period: **Monthly**. Budget amount: **USD 5.00**.
-6. Add email alerts for:
-   - 50% actual spend;
-   - 80% actual spend;
-   - 100% actual spend;
-   - 100% forecasted spend.
-7. Use an email address that you check and confirm any verification message.
-8. Do not attach an automatic IAM action yet; alerts are easier to understand
-   during the first lab.
+3. Choose **Use a template (simplified)**.
+4. Select **Zero spend budget**.
+5. Name it `MangaHub-demo-zero-spend`.
+6. Use an email address that you check and confirm any verification message.
+7. Choose **Create budget**.
+8. Do not attach an automatic IAM action or create a paid Budget Report. A
+   budget sends delayed alerts; it is not a hard spending limit and does not
+   stop EC2 automatically.
 
-AWS documents the current console flow in [Creating a cost
-budget](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-create.html).
+AWS documents the zero-spend template in [Using a budget template
+(simplified)](https://docs.aws.amazon.com/cost-management/latest/userguide/budget-templates.html).
 
 ### A4. Lock the working Region
 
@@ -301,7 +298,9 @@ instance**.
 #!/bin/bash
 set -euxo pipefail
 dnf upgrade -y
-dnf install -y docker git jq curl openssl util-linux
+# Amazon Linux 2023 includes curl-minimal, which already provides `curl`.
+# Requesting the mutually exclusive full `curl` package can abort cloud-init.
+dnf install -y docker git jq openssl util-linux
 install -d -m 0755 /etc/docker
 cat > /etc/docker/daemon.json <<'JSON'
 {
