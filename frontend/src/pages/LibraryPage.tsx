@@ -10,6 +10,7 @@ import { libraryApi, LIBRARY_STATUSES } from '@/api/library'
 import type { LibraryStatus, UserProgress } from '@/api/library'
 import { mangaApi } from '@/api/manga'
 import type { Manga } from '@/api/manga'
+import { MangaCoverImage } from '@/components/manga/MangaCoverImage'
 import { useAuthStore } from '@/store/authStore'
 
 type Tab = LibraryStatus
@@ -224,7 +225,7 @@ function LibraryCard({ progress, manga }: { progress: UserProgress; manga: Manga
         className="relative block aspect-[2/3] overflow-hidden bg-[var(--color-surface2)]"
       >
         {manga?.cover_url ? (
-          <img
+          <MangaCoverImage
             src={manga.cover_url}
             alt={manga.title}
             className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"

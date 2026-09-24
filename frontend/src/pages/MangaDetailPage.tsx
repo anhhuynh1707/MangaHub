@@ -11,6 +11,7 @@ import { libraryApi, LIBRARY_STATUSES, type LibraryStatus } from '@/api/library'
 import { reviewApi, type Review } from '@/api/review'
 import { mangaRoomId } from '@/api/chat'
 import { apiErrorMessage } from '@/api/errors'
+import { MangaCoverImage } from '@/components/manga/MangaCoverImage'
 import { useAuthStore } from '@/store/authStore'
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -535,7 +536,7 @@ export default function MangaDetailPage() {
         <div className="mx-auto w-44 flex-shrink-0 sm:mx-0 sm:w-52">
           <div className="aspect-[2/3] overflow-hidden rounded-xl border border-[var(--color-border-raw)] bg-[var(--color-surface2)] shadow-lg">
             {manga.cover_url ? (
-              <img
+              <MangaCoverImage
                 src={manga.cover_url}
                 alt={manga.title}
                 className="h-full w-full object-cover"

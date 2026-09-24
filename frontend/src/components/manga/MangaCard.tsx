@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { BookOpen } from 'lucide-react'
 import type { Manga } from '@/api/manga'
+import { MangaCoverImage } from './MangaCoverImage'
 
 interface Props {
   manga: Manga
@@ -25,7 +26,7 @@ export function MangaCard({ manga }: Props) {
       {/* Cover */}
       <div className="relative aspect-[2/3] overflow-hidden bg-[var(--color-surface2)]">
         {manga.cover_url ? (
-          <img
+          <MangaCoverImage
             src={manga.cover_url}
             alt={manga.title}
             loading="lazy"

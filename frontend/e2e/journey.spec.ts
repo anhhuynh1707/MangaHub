@@ -12,6 +12,7 @@ test('user journey: register → login → library → progress → review → c
   const password = 'e2epass123'
   const mangaId = `e2e-manga-${unique}`
   const mangaTitle = `E2E Test Manga ${unique}`
+  const mangaCover = 'https://uploads.mangadex.org/covers/e2e/cover.jpg.256.jpg'
   let token = '' // captured after login, reused for API setup + cleanup
 
   // ── 1. Register ──────────────────────────────────────────────────
@@ -59,15 +60,27 @@ test('user journey: register → login → library → progress → review → c
         status: 'ongoing',
         total_chapters: 24,
         description: 'Created by the Playwright E2E journey test.',
+        cover_url: mangaCover,
       },
     })
     expect(res.status()).toBe(201)
+  })
+
+  await test.step('render MangaDex covers without leaking the app referrer', async () => {
+    await page.goto('/')
+    await page.getByPlaceholder('Search by title, author, or description…').fill(mangaTitle)
+
+    const cover = page.getByRole('img', { name: mangaTitle })
+    await expect(cover).toHaveAttribute('src', mangaCover)
+    await expect(cover).toHaveAttribute('referrerpolicy', 'no-referrer')
   })
 
   // ── 4. Add the manga to the library ──────────────────────────────
   await test.step('add manga to library', async () => {
     await page.goto(`/manga/${mangaId}`)
     await expect(page.getByRole('heading', { name: mangaTitle })).toBeVisible()
+    await expect(page.getByRole('img', { name: mangaTitle }))
+      .toHaveAttribute('referrerpolicy', 'no-referrer')
 
     await page.getByRole('button', { name: 'Add to Library' }).click()
     // Once added, the in-library controls (Remove) appear.
@@ -79,6 +92,8 @@ test('user journey: register → login → library → progress → review → c
     await page.goto('/library')
     await expect(page.getByText(mangaTitle)).toBeVisible()
     await expect(page.getByText('Ch. 0')).toBeVisible()
+    await expect(page.getByRole('img', { name: mangaTitle }))
+      .toHaveAttribute('referrerpolicy', 'no-referrer')
 
     await page.getByTestId('chapter-increment').click()
     await expect(page.getByText('Ch. 1')).toBeVisible()

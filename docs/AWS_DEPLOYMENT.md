@@ -416,7 +416,7 @@ sudo git clone --branch features/devsecops --single-branch \
   https://github.com/anhhuynh1707/MangaHub.git mangahub-src
 cd /opt/mangahub-src
 sudo git checkout --detach FULL_SHA
-git rev-parse HEAD
+sudo git -C /opt/mangahub-src rev-parse HEAD
 ```
 
 The last command must exactly equal `FULL_SHA`. Source exists only to provide
