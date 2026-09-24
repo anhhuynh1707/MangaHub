@@ -2,7 +2,8 @@ x-cloudwatch-options: &cloudwatch-options
   awslogs-region: "${MANGAHUB_AWS_REGION:-ap-southeast-2}"
   awslogs-group: "${MANGAHUB_CLOUDWATCH_LOG_GROUP:-/mangahub/demo/containers}"
   awslogs-create-group: "false"
-  awslogs-create-stream: "true"
+  # Docker creates each explicitly named stream automatically. The instance
+  # role grants CreateLogStream only for the seven streams below.
   awslogs-force-flush-interval-seconds: "5"
   mode: non-blocking
   max-buffer-size: 4m

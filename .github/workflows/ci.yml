@@ -254,6 +254,13 @@ jobs:
           HOST_HTTP_PORT: "8088"
           RAW_BIND_ADDRESS: 127.0.0.1
         run: |
+          if grep --fixed-strings --quiet 'awslogs-create-stream' \
+              deploy/docker/docker-compose.cloudwatch.yml; then
+            echo "awslogs-create-stream is incompatible with the supported EC2 Docker baseline" >&2
+            exit 1
+          fi
+          grep --fixed-strings --quiet 'awslogs-create-group: "false"' \
+            deploy/docker/docker-compose.cloudwatch.yml
           docker compose \
             -f deploy/docker/docker-compose.prod.yml \
             -f deploy/docker/docker-compose.cloudwatch.yml \

@@ -2321,7 +2321,10 @@ docker compose --project-name mangahub-prod \
 
 The `awslogs` runtime should not be started locally unless real scoped AWS
 prerequisites exist. Rendering proves the override merges correctly without
-making an AWS call:
+making an AWS call. CI also rejects the unsupported `awslogs-create-stream`
+override for the supported Amazon Linux Docker baseline: stream creation is
+enabled by default, while `awslogs-create-group=false` still requires the
+pre-created bounded group.
 
 ```bash
 export MANGAHUB_AWS_REGION=ap-southeast-2

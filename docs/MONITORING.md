@@ -101,8 +101,14 @@ sudo docker inspect --format '{{json .HostConfig.LogConfig}}' \
 ```
 
 The driver must be `awslogs`, with non-blocking delivery and the expected Sydney
-group. Never put a secret in an AWS log-driver option or a systemd environment
-line. Docker documents both the [`awslogs`
+group. Docker creates each explicitly named log stream by default when its
+container starts; the instance role grants `logs:CreateLogStream` only for
+those seven streams. The optional `awslogs-create-stream` control is omitted
+for compatibility with the Amazon Linux Docker baseline, which does not need
+it for the default behavior. The Compose override keeps automatic log-group
+creation disabled, so the pre-created seven-day group remains mandatory. Never
+put a secret in an AWS log-driver option or a systemd environment line. Docker
+documents both the [`awslogs`
 options](https://docs.docker.com/engine/logging/drivers/awslogs/) and the
 [non-blocking delivery trade-off](https://docs.docker.com/engine/logging/configure/):
 when the bounded local buffer fills, Docker can drop log events rather than
