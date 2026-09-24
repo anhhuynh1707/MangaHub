@@ -1664,6 +1664,20 @@ Remediation record from 2026-09-24:
 | Replacement amd64 manifest | `sha256:9f1d635195267228edfdad0bbaacf390031785924f10f8449ff9c934ff765290` |
 | Replacement scan | Trivy 0.72.0: 0 HIGH/CRITICAL vulnerabilities for the immutable multi-architecture digest |
 
+The same run then reached the separately pinned Redis scan and found a second
+base-image refresh requirement:
+
+| Item | Finding / resolution |
+|---|---|
+| Failed artifact | Pinned Redis 7 Alpine production image |
+| Finding | `CVE-2026-45447`, HIGH, OpenSSL heap use-after-free in `PKCS7_verify()` |
+| Vulnerable packages | `libcrypto3` and `libssl3` `3.3.7-r0` on Alpine `3.21.7` |
+| Fixed packages | `3.3.7-r1` on Alpine `3.21.8` |
+| Old image digest | `sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf` |
+| Replacement index | `sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499` |
+| Replacement amd64 manifest | `sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2` |
+| Replacement scan | Trivy 0.72.0: 0 HIGH/CRITICAL vulnerabilities for the immutable multi-architecture digest |
+
 ---
 
 ## S18. UDP Delivery Confirmation (ACK System)
