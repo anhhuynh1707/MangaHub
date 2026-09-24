@@ -11,12 +11,14 @@ generated TypeScript types, and a Playwright end-to-end test suite in CI.
 ## Table of Contents
 1. [Tech Stack](#tech-stack)
 2. [Architecture Overview](#architecture-overview)
-3. [Setup Instructions](#setup-instructions)
-4. [Frontend (React SPA)](#frontend-react-spa)
-5. [Testing](#testing)
-6. [Screenshots](#screenshots)
-7. [API Documentation](#api-documentation)
-8. [CLI Commands](#cli-commands)
+3. [AWS EC2 DevSecOps Demo](#aws-ec2-devsecops-demo)
+4. [Setup Instructions](#setup-instructions)
+5. [Frontend (React SPA)](#frontend-react-spa)
+6. [Testing](#testing)
+7. [Portfolio Evidence Checklist](#portfolio-evidence-checklist)
+8. [Screenshots](#screenshots)
+9. [API Documentation](#api-documentation)
+10. [CLI Commands](#cli-commands)
 
 ---
 
@@ -36,16 +38,18 @@ build, Docker smoke test, Playwright E2E, Govulncheck, npm audit, Gitleaks,
 Trivy, and gated GHCR publishing), Dependabot, `openapi-typescript` +
 `swagger2openapi` (generated API types), Playwright (E2E).
 
-The AWS portfolio path is documented in the beginner-oriented
-[`docs/AWS_DEPLOYMENT.md`](docs/AWS_DEPLOYMENT.md). It uses a dedicated Sydney
-VPC, one EC2 instance, Session Manager instead of public SSH, and explicit cost
-and cleanup checkpoints; the document does not claim resources exist before
-they are manually verified. The immutable deployment and recovery contract is
-documented in [`docs/ROLLBACK.md`](docs/ROLLBACK.md), while the WAL-safe SQLite
-procedure and proof are in [`docs/BACKUP.md`](docs/BACKUP.md). The bounded
-CloudWatch design and pending EC2 proof are in
-[`docs/MONITORING.md`](docs/MONITORING.md). The verified-versus-pending AWS
-topology, evidence gate, and truthful CV wording are kept separately in
+**AWS demo** — A dedicated learning VPC in Asia Pacific (Sydney), one encrypted
+Amazon Linux 2023 EC2 instance, Systems Manager Session Manager, immutable GHCR
+images, Nginx, CloudWatch metrics/logs/alarms, SNS email notification, and
+WAL-safe SQLite backup/restore. The deployment intentionally uses HTTP for its
+domain-free browser demo and does not claim high availability.
+
+The beginner-oriented procedure is documented in
+[`docs/AWS_DEPLOYMENT.md`](docs/AWS_DEPLOYMENT.md). The immutable deployment and
+recovery contract is in [`docs/ROLLBACK.md`](docs/ROLLBACK.md), the SQLite
+procedure is in [`docs/BACKUP.md`](docs/BACKUP.md), and the bounded CloudWatch
+design is in [`docs/MONITORING.md`](docs/MONITORING.md). Sanitized evidence,
+architecture status, and truthful CV wording are kept separately in
 [`docs/AWS_ARCHITECTURE.md`](docs/AWS_ARCHITECTURE.md),
 [`docs/AWS_EVIDENCE.md`](docs/AWS_EVIDENCE.md), and
 [`docs/PORTFOLIO.md`](docs/PORTFOLIO.md).
@@ -134,6 +138,43 @@ Client (React SPA / CLI)
 
 - **SQLite**: The application stores persistent data with tables for users, manga, user progress, reviews, chat messages, and private messages. Seed manga data is loaded from `data/manga.sample.json` at startup.
 - **Redis**: Used as an optional cache layer for frequently accessed read paths in manga, review, and user services.
+
+---
+
+## AWS EC2 DevSecOps Demo
+
+The portfolio environment is a deliberately small, manually operated AWS lab.
+It demonstrates deployment and operations without presenting one EC2 instance
+and SQLite as an enterprise production architecture.
+
+```text
+GitHub Actions
+  -> tests + dependency/secret/repository/image security gates
+  -> matching backend/frontend GHCR images tagged with the full Git SHA
+  -> manual, health-gated deployment through Session Manager
+  -> Nginx edge on EC2 port 80
+       -> React SPA
+       -> Go REST API + WebSocket + SSE
+       -> private Redis + persistent SQLite
+  -> CloudWatch metrics, seven bounded log streams, five alarms, and SNS email
+```
+
+| Area | Implemented demo control |
+|---|---|
+| Network | Dedicated Sydney VPC, public subnet, Internet Gateway, explicit route table, and project Security Group |
+| Administration | Systems Manager Session Manager; no public SSH rule or EC2 access key |
+| Compute and storage | One Amazon Linux 2023 EC2 instance with an encrypted `gp3` root volume |
+| Delivery | Matching backend/frontend GHCR images addressed by one full Git commit SHA; EC2 does not build source or deploy `latest` |
+| Web ingress | HTTP `80` to the Nginx edge for the domain-free demonstration |
+| Raw protocols | TCP `9090`, UDP `9091`, and gRPC `9092` enabled only for short owner-IPv4 `/32` tests, then removed |
+| Secrets | Root-owned mode-`600` runtime environment generated on EC2; no secret is committed or printed |
+| Data recovery | SQLite WAL-safe backup, checksum/integrity verification, retention, and controlled restore rehearsal |
+| Observability | Four custom metrics, seven fixed container log streams with seven-day retention, five alarms, and confirmed SNS email |
+| Failure handling | Controlled edge failure detected by CloudWatch; the recovery procedure redeploys the same immutable release without deleting volumes |
+
+The current boundaries are intentional: no domain/TLS, automatic deployment to
+EC2, off-instance backup, load balancer, Auto Scaling, or multi-instance
+database. Those remain possible future improvements rather than current claims.
 
 ---
 
@@ -290,6 +331,29 @@ journey: **register → login → add to library → update progress → review 
 then cleans up its test data. CI runs Go tests, the frontend build, a Docker
 smoke test, and the Playwright `e2e` job. See `docs/TESTING.md` for the full
 manual API/CLI test guide.
+
+---
+
+## Portfolio Evidence Checklist
+
+Keep raw screenshots outside Git until they are cropped and reviewed. Never
+capture passwords, MFA codes or QR images, JWTs, cookies, AWS access keys,
+environment values, database contents, account IDs, personal email addresses,
+or the public IP address. A compact final portfolio set is:
+
+- [ ] GitHub Actions run with all required jobs green and the commit SHA visible.
+- [ ] VPC resource map showing the named VPC, subnet, Internet Gateway, and route-table relationship.
+- [ ] EC2 summary showing Sydney, running state, instance type, project role/Security Group, encrypted storage, and IMDSv2 after sensitive values are hidden.
+- [ ] MangaHub browser page reached through the EC2 edge, using disposable demo data and with the address bar cropped or blurred.
+- [ ] CloudWatch alarm/metric view showing the four metrics, five alarms, and the controlled `OK -> ALARM -> OK` application transition without log bodies.
+- [ ] Sanitized terminal excerpt showing the full deployed SHA, `cloudwatch` mode, health success, seven healthy containers, and successful backup/restore or rollback—never `/opt/mangahub/.env`.
+
+Optional raw-protocol evidence may combine successful TCP, UDP, and gRPC client
+results in one sanitized terminal image. If included, record that all three
+temporary Security Group `/32` rules were removed after the test.
+
+The formal pass/fail record and redaction rules live in
+[`docs/AWS_EVIDENCE.md`](docs/AWS_EVIDENCE.md).
 
 ---
 
